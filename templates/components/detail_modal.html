@@ -1,0 +1,206 @@
+<!-- templates/components/detail_modal.html -->
+<div id="detail-modal" class="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 hidden">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-3/4 max-h-screen overflow-auto">
+        
+        <!-- Título genérico do modal -->
+        <h2 class="text-2xl font-semibold mb-4">Detalhe</h2>
+
+        <!-- Capa (campos de "header": True) -->
+        <div id="detail-cover" class="mb-6">
+            <!-- Aqui vamos colocar um card visualmente agradável -->
+            <div id="detail-header-fields" class="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded">
+                <!-- Campos de cabeçalho serão inseridos dinamicamente via JS -->
+            </div>
+        </div>
+
+        <!-- Abas (se existirem) -->
+        <div id="detail-tabs-container" class="border-b border-gray-300 mb-4 hidden">
+            <ul id="detail-tabs" class="flex space-x-6 text-lg font-semibold">
+                <!-- Botões das abas criados via JS -->
+            </ul>
+        </div>
+
+        <!-- Conteúdo das Abas -->
+        <div id="detail-content" class="space-y-6">
+            <!-- Conteúdo de cada aba criado via JS -->
+        </div>
+
+        <!-- Botão de Fechar -->
+        <div class="flex justify-end mt-6">
+            <button onclick="closeDetailModal()" class="px-4 py-2 bg-gray-500 text-white rounded">Fechar</button>
+        </div>
+    </div>
+</div>
+<script>
+    async function openDetailModal(id) {
+        const modal = document.getElementById("detail-modal");
+        const headerFields = document.getElementById("detail-header-fields");
+        const tabsContainer = document.getElementById("detail-tabs-container");
+        const tabsList = document.getElementById("detail-tabs");
+        const contentContainer = document.getElementById("detail-content");
+
+        // detail_schema já vem do contexto no template (passado com tojson)
+        const detailSchema = {{ detail_schema | tojson }};
+
+        try {
+            const response = await fetch(`/categories/${id}/details`);
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            // Limpa estados anteriores
+            headerFields.innerHTML = "";
+            tabsList.innerHTML = "";
+            contentContainer.innerHTML = "";
+            let tabs = {};
+
+            // Percorre o schema e separa campos de header e de abas
+            detailSchema.forEach(field => {
+                const value = data[field.name];
+
+                if (field.header) {
+                    // Campos da capa
+                    const headerItem = document.createElement("div");
+                    headerItem.className = "flex items-center";
+                    headerItem.innerHTML = `<span class="font-semibold w-24">${field.label}:</span>
+                                              <span class="ml-2">${value}</span>`;
+                    headerFields.appendChild(headerItem);
+                } else if (field.tab) {
+                    // Agrupar campos por aba
+                    if (!tabs[field.tab]) {
+                        tabs[field.tab] = [];
+                    }
+                    tabs[field.tab].push({ field, value });
+                }
+            });
+
+            // Cria as abas se houver campos agrupados
+            const tabNames = Object.keys(tabs);
+            if (tabNames.length > 0) {
+                tabsContainer.classList.remove("hidden");
+            } else {
+                tabsContainer.classList.add("hidden");
+            }
+
+            tabNames.forEach((tabName, index) => {
+                if (tabs[tabName].length === 0) return;
+
+                // Cria botão da aba
+                const tabButton = document.createElement("li");
+                tabButton.textContent = tabName;
+                tabButton.className = `cursor-pointer py-2 px-4 border-b-2 border-transparent hover:border-gray-500 ${index === 0 ? "border-gray-500" : ""}`;
+                tabButton.onclick = () => showTabContent(tabName);
+                tabsList.appendChild(tabButton);
+
+                // Cria o conteúdo da aba
+                const tabContent = document.createElement("div");
+                tabContent.id = `tab-${tabName}`;
+                tabContent.className = index === 0 ? "" : "hidden";
+
+                let tabHtml = ""; // Não vamos repetir o nome da aba aqui
+
+                tabs[tabName].forEach(({ field, value }) => {
+                    if (field.type === "int") {
+                        tabHtml += `<div class="flex items-center mb-2">
+                                        <span class="font-semibold w-32">${field.label}:</span>
+                                        <span>${value}</span>
+                                    </div>`;
+                    } else if (field.type === "table") {
+                        // Renderiza tabela conforme definido
+                        let tableHtml = `<table class="min-w-full border rounded-lg">
+                                            <thead class="bg-gray-100">
+                                                <tr>`;
+                        field.columns.forEach(col => {
+                            tableHtml += `<th class="border p-2">${col.label}</th>`;
+                        });
+                        tableHtml += `       </tr>
+                                            </thead>
+                                            <tbody>`;
+                        value.forEach(row => {
+                            tableHtml += `<tr>`;
+                            field.columns.forEach(col => {
+                                // Se a coluna for do tipo action, renderiza botão
+                                if (col.type === "action") {
+                                    tableHtml += `<td class="border p-2 text-center">
+                                                    <button onclick="handleAction('${row[col.name]}')" class="bg-red-500 text-white px-3 py-1 rounded">
+                                                        ${col.label}
+                                                    </button>
+                                                  </td>`;
+                                } else {
+                                    tableHtml += `<td class="border p-2">${row[col.name]}</td>`;
+                                }
+                            });
+                            tableHtml += `</tr>`;
+                        });
+                        tableHtml += `       </tbody>
+                                        </table>`;
+                        tabHtml += tableHtml;
+                    } else if (field.type === "action") {
+                        // Renderiza um botão de ação para campos do tipo "action"
+                        // Aqui, "value" deve conter a URL da ação.
+                        tabHtml += `<button onclick="handleAction('${value}')" class="bg-red-500 text-white px-3 py-1 rounded">
+                                        ${field.label}
+                                    </button>`;
+                    } else {
+                        // Caso padrão: renderiza o campo em um parágrafo
+                        tabHtml += `<div class="flex items-center mb-2">
+                                        <span class="font-semibold w-32">${field.label}:</span>
+                                        <span>${value}</span>
+                                    </div>`;
+                    }
+                });
+
+                tabContent.innerHTML = tabHtml;
+                contentContainer.appendChild(tabContent);
+            });
+
+            modal.classList.remove("hidden");
+        } catch (error) {
+            console.error("Erro ao carregar os detalhes:", error);
+            alert("Erro ao carregar detalhes.");
+        }
+    }
+
+    function showTabContent(tabName) {
+        document.querySelectorAll("#detail-content > div").forEach(div => div.classList.add("hidden"));
+        document.getElementById(`tab-${tabName}`).classList.remove("hidden");
+
+        document.querySelectorAll("#detail-tabs li").forEach(tab => tab.classList.remove("border-gray-500"));
+        // Para selecionar o botão correto, percorremos os itens manualmente:
+        const tabs = document.querySelectorAll("#detail-tabs li");
+        tabs.forEach(tab => {
+            if (tab.textContent.trim() === tabName) {
+                tab.classList.add("border-gray-500");
+            }
+        });
+    }
+
+    function closeDetailModal() {
+        document.getElementById("detail-modal").classList.add("hidden");
+    }
+
+    async function handleAction(url) {
+        if (!confirm("Tem certeza que deseja realizar esta ação?")) {
+            return;
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            if (response.ok) {
+                alert("Ação realizada com sucesso!");
+                location.reload();
+            } else {
+                alert("Erro ao executar ação.");
+            }
+        } catch (error) {
+            console.error("Erro ao executar ação:", error);
+            alert("Erro ao executar ação.");
+        }
+    }
+</script>

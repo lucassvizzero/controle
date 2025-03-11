@@ -1,0 +1,70 @@
+<!-- templates/components/upload_modal.html -->
+<div id="upload-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded shadow-lg w-96">
+      <h2 class="text-xl font-bold mb-4">{{ upload_schema.label }}</h2>
+      <p class="text-sm text-gray-600 mb-4">{{ upload_schema.description }}</p>
+      
+      <form id="upload-form" method="POST" enctype="multipart/form-data">
+        {# Renderiza os campos pré-definidos (ex.: conta e cartão) se existirem #}
+        {% if upload_schema.pre_fields %}
+          {% for field in upload_schema.pre_fields %}
+            {% if field.type == "combobox" %}
+              <label for="{{ field.name }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+              <select name="{{ field.name }}" id="{{ field.name }}" class="w-full p-2 border rounded mb-4">
+                {% for option in field.options %}
+                  <option value="{{ option.value }}">{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <label for="{{ field.name }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+              <input type="{{ field.type }}" name="{{ field.name }}" id="{{ field.name }}" class="w-full p-2 border rounded mb-4" {% if field.required %} required {% endif %}>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        
+        <label for="upload-file" class="block text-sm font-medium text-gray-700">
+          Arquivo ({{ upload_schema.file_type | upper }})
+        </label>
+        <input type="file" name="file" id="upload-file" accept=".{{ upload_schema.file_type }}" class="w-full p-2 border rounded mb-4">
+        
+        <div class="flex justify-between mt-4">
+          <button type="button" onclick="uploadFile()" class="bg-green-500 text-white py-2 px-4 rounded">
+            Enviar
+          </button>
+          <button type="button" onclick="closeUploadModal()" class="bg-gray-500 text-white py-2 px-4 rounded">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <script>
+    function openUploadModal() {
+      document.getElementById("upload-modal").classList.remove("hidden");
+    }
+  
+    function closeUploadModal() {
+      document.getElementById("upload-modal").classList.add("hidden");
+    }
+  
+    async function uploadFile() {
+      const form = document.getElementById("upload-form");
+      const formData = new FormData(form);
+      
+      try {
+        // Para transações, a URL de upload deve ser /transactions/upload
+        const response = await fetch(`/transactions/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        const result = await response.json();
+        alert(result.message);
+        closeUploadModal();
+      } catch (error) {
+        alert("Erro ao enviar o arquivo.");
+        console.error(error);
+      }
+    }
+  </script>
+  

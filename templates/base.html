@@ -1,0 +1,53 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Meu Sistema{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="/static/js/utils.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="flex">
+        {% include 'components/sidebar.html' %}
+
+        <div class="flex-1 p-6">
+            <h1 class="text-2xl font-bold mb-4">{% block header %}Dashboard{% endblock %}</h1>
+            {% block content %} {% endblock %} 
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Sidebar toggle
+            const sidebar = document.getElementById("sidebar");
+            const toggleSidebar = document.getElementById("toggle-sidebar");
+            const sidebarTexts = document.querySelectorAll(".sidebar-text");
+
+            toggleSidebar.addEventListener("click", () => {
+                const isExpanded = sidebar.classList.contains("w-64");
+
+                sidebar.classList.toggle("w-20", isExpanded);
+                sidebar.classList.toggle("w-64", !isExpanded);
+
+                sidebar.setAttribute('aria-expanded', (!isExpanded).toString());
+                sidebarTexts.forEach(text => text.classList.toggle("hidden", isExpanded));
+                toggleSidebar.classList.toggle("rotate-180");
+                toggleSidebar.setAttribute('aria-label', !isExpanded ? 'Recolher sidebar' : 'Expandir sidebar');
+            });
+
+            // Logout
+            document.getElementById("logout-btn").addEventListener("click", async () => {
+                try {
+                    await fetch("/logout", { method: "POST", credentials: "include" });
+                } catch (error) {
+                    console.error("Erro ao fazer logout:", error);
+                }
+                window.location.href = "/login";
+            });
+        });
+    </script>
+</body>
+</html>

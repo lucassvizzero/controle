@@ -1,0 +1,17 @@
+{% if alerts %}
+    {% for alert in alerts %}
+        {% if alert.level == "success" %}
+            <div class="bg-green-200 border border-green-300 text-green-800 p-3 rounded mb-2">
+                {{ alert.message }}
+            </div>
+        {% elif alert.level == "error" %}
+            <div class="bg-red-200 border border-red-300 text-red-800 p-3 rounded mb-2">
+                {{ alert.message }}
+            </div>
+        {% else %}
+            <div class="bg-gray-200 border border-gray-300 text-gray-800 p-3 rounded mb-2">
+                {{ alert.message }}
+            </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}

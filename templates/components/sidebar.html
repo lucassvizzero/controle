@@ -1,0 +1,55 @@
+<!-- templates/components/sidebar.html -->
+<aside id="sidebar" class="bg-blue-700 text-white min-h-screen w-20 p-5 flex flex-col transition-all duration-300 relative" aria-expanded="false">
+    <!-- Botão de expandir/recolher -->
+    <button id="toggle-sidebar" class="absolute top-1/2 -right-3 transform -translate-y-1/2 bg-blue-500 text-white p-2 rounded-full shadow-md focus:outline-none transition-transform hover:scale-110 border border-white" aria-label="Expandir sidebar">
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+    </button>
+
+    <!-- Logo -->
+    <div class="flex items-center justify-center mb-6">
+        <img src="/static/img/logo.png" alt="Controle Financeiro" class="sidebar-logo cursor-pointer" onclick="location.href='/'">
+    </div>
+
+    <!-- Menu de Navegação -->
+    <nav class="flex-1">
+        <ul class="space-y-6">
+            <li>
+                <a href="/transactions" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span class="sidebar-text hidden">Transações</span>
+                </a>
+            </li>
+            <li>
+                <a href="/accounts" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+                    <i class="fas fa-university"></i>
+                    <span class="sidebar-text hidden">Contas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cards" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+                    <i class="fas fa-credit-card"></i>
+                    <span class="sidebar-text hidden">Cartões</span>
+                </a>
+            </li>
+            <li>
+                <a href="/categories" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+                    <i class="fas fa-folder"></i>
+                    <span class="sidebar-text hidden">Categorias</span>
+                </a>
+            </li>
+            <li>
+                <a href="/budgets" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="sidebar-text hidden">Orçamentos</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="mt-auto flex justify-center">
+        <button id="logout-btn" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+            <i class="fas fa-sign-out-alt"></i>
+            <span class="sidebar-text hidden">Sair</span>
+        </button>
+    </div>
+</aside>

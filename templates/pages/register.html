@@ -1,0 +1,48 @@
+{% extends "base_auth.html" %}
+
+{% block title %}Cadastro{% endblock %}
+{% block heading %}Cadastro{% endblock %}
+
+{% block content %}
+<form id="register-form" class="space-y-4">
+    <div>
+        <label for="name" class="block text-gray-700 font-medium">Nome</label>
+        <input type="text" id="name" name="name" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    </div>
+    <div>
+        <label for="email" class="block text-gray-700 font-medium">Email</label>
+        <input type="email" id="email" name="email" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    </div>
+    <div>
+        <label for="password" class="block text-gray-700 font-medium">Senha</label>
+        <input type="password" id="password" name="password" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    </div>
+    <button type="submit" class="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 font-semibold">Cadastrar</button>
+</form>
+{% endblock %}
+
+{% block footer %}
+Já tem uma conta? <a href="/login" class="text-blue-600 font-semibold hover:underline">Faça login</a>
+{% endblock %}
+
+<script>
+document.getElementById("register-form").addEventListener("submit", async function(event) {
+    event.preventDefault();
+    const name = document.getElementById("name").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
+    });
+
+    if (response.ok) {
+        alert("Cadastro realizado com sucesso! Redirecionando para login.");
+        window.location.href = "/login";
+    } else {
+        alert("Erro ao cadastrar. Verifique os dados e tente novamente.");
+    }
+});
+</script>

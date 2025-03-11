@@ -1,0 +1,451 @@
+<!-- templates/components/crud_modal.html -->
+<div id="crud-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-white p-6 rounded shadow-lg w-96">
+        <h2 id="modal-title" class="text-xl font-bold mb-4">Adicionar Item</h2>
+        <form id="crud-form" method="POST">
+            <input type="hidden" name="item_id" id="item-id">
+
+            {% for field in crud_schema %}
+                <div class="mb-4">
+                    <label class="block text-gray-700" for="{{ field.name }}">{{ field.label }}</label>
+                    {% if field.type == "combobox" %}
+                        <select name="{{ field.name }}" id="{{ field.name }}" class="w-full p-2 border rounded">
+                            {% for option in field.options %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                            {% endfor %}
+                        </select>
+
+                    {% elif field.type == "switch" %}
+                        <div class="flex items-center mt-2">
+                            <input type="switch" name="{{ field.name }}" id="{{ field.name }}" class="hidden">
+                            <div class="relative w-10 h-5 bg-gray-300 rounded-full cursor-pointer" onclick="toggleSwitch('{{ field.name }}')">
+                                <div id="{{ field.name }}-toggle" class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform"></div>
+                            </div>
+                        </div>
+                    {% elif field.type == "icons" %}
+                        <div class="relative">
+                            <input type="text" name="{{ field.name }}" id="{{ field.name }}" class="hidden">
+                            <div class="flex items-center space-x-2 cursor-pointer" onclick="toggleIconDropdown('{{ field.name }}')">
+                                <i id="selected-icon-{{ field.name }}" class="fas fa-question-circle text-2xl"></i>
+                                <span class="text-gray-700">Escolha um Ícone</span>
+                            </div>
+                            <div id="icon-dropdown-{{ field.name }}" class="hidden absolute bg-white border rounded shadow-lg p-3 w-60 max-h-64 overflow-auto">
+                                <input type="text" id="icon-search-{{ field.name }}" class="w-full p-1 border rounded mb-2" placeholder="Buscar ícone...">
+                                <div id="icon-list-{{ field.name }}" class="grid grid-cols-5 gap-2"></div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <input type="{{ field.type }}" name="{{ field.name }}" id="{{ field.name }}"
+                               class="w-full p-2 border rounded"
+                               {% if field.required %}required{% endif %}>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <div class="flex justify-between mt-4">
+                <button type="submit" id="save-btn" class="bg-blue-500 text-white py-2 px-4 rounded">Salvar</button>
+                <button type="button" id="delete-btn" class="hidden bg-red-500 text-white py-2 px-4 rounded">Excluir</button>
+                <button type="button" id="cancel-btn" class="bg-gray-500 text-white py-2 px-4 rounded">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
+
+<style>
+/* Estilização do switch */
+.relative.w-10 {
+    transition: background-color 0.3s ease-in-out;
+}
+.relative.w-10.active {
+    background-color: #4CAF50;
+}
+.absolute {
+    transition: transform 0.3s ease-in-out;
+}
+.absolute.move {
+    transform: translateX(100%);
+}
+</style>
+
+<script>
+// Alternar dropdown de ícones
+function toggleIconDropdown(fieldName) {
+    document.getElementById(`icon-dropdown-${fieldName}`).classList.toggle("hidden");
+}
+
+// Carregar lista de ícones
+function loadIcons(fieldName) {
+    const iconContainer = document.getElementById(`icon-list-${fieldName}`);
+    const searchInput = document.getElementById(`icon-search-${fieldName}`);
+
+    if (!iconContainer) {
+        console.error(`Container de ícones não encontrado para ${fieldName}`);
+        return;
+    }
+
+    iconContainer.innerHTML = "";  // Limpa antes de preencher
+
+    const icons = [
+    // 🏦 Financeiro e Pagamentos
+    "fas fa-wallet",
+    "fas fa-coins",
+    "fas fa-money-bill-wave",
+    "fas fa-money-bill",
+    "fas fa-money-check",
+    "fas fa-money-check-alt",
+    "fas fa-cash-register",
+    "fas fa-hand-holding-usd",
+    "fas fa-university",
+    "fas fa-landmark",
+    "fas fa-building",
+    "fas fa-bank",
+    "fas fa-credit-card",
+    "fas fa-id-card",
+    "fas fa-hand-holding-dollar",
+    "fas fa-receipt",
+    "fas fa-piggy-bank",
+    "fas fa-safe",
+    "fas fa-file-invoice-dollar",
+    "fas fa-calculator",
+
+    // 💳 Cartões e Bancos
+    "fas fa-credit-card",
+    "fas fa-money-check",
+    "fas fa-id-card",
+    "fas fa-university",
+    "fas fa-landmark",
+    "fas fa-hand-holding-usd",
+    "fas fa-piggy-bank",
+    "fas fa-wallet",
+    "fas fa-exchange-alt",
+    "fas fa-hand-holding",
+
+    // 📈 Investimentos e Renda
+    "fas fa-chart-line",
+    "fas fa-chart-pie",
+    "fas fa-chart-bar",
+    "fas fa-chart-area",
+    "fas fa-arrow-trend-up",
+    "fas fa-arrow-trend-down",
+    "fas fa-landmark",
+    "fas fa-piggy-bank",
+    "fas fa-hand-holding-usd",
+    "fas fa-balance-scale",
+    "fas fa-percentage",
+    "fas fa-business-time",
+
+    // 🏠 Moradia e Contas Domésticas
+    "fas fa-home",
+    "fas fa-lightbulb",
+    "fas fa-water",
+    "fas fa-bolt",
+    "fas fa-fire",
+    "fas fa-toilet-paper",
+    "fas fa-wrench",
+    "fas fa-toolbox",
+    "fas fa-hammer",
+    "fas fa-screwdriver",
+    "fas fa-soap",
+    "fas fa-door-open",
+    "fas fa-bed",
+    "fas fa-couch",
+    "fas fa-broom",
+
+    // 🚗 Transporte e Veículos
+    "fas fa-car",
+    "fas fa-gas-pump",
+    "fas fa-taxi",
+    "fas fa-bus",
+    "fas fa-motorcycle",
+    "fas fa-plane",
+    "fas fa-train",
+    "fas fa-shipping-fast",
+    "fas fa-road",
+    "fas fa-car-battery",
+    "fas fa-truck-pickup",
+    "fas fa-traffic-light",
+
+    // 🛒 Compras e E-commerce
+    "fas fa-shopping-cart",
+    "fas fa-shopping-bag",
+    "fas fa-store",
+    "fas fa-gift",
+    "fas fa-box",
+    "fas fa-truck",
+    "fas fa-cart-arrow-down",
+    "fas fa-cart-plus",
+    "fas fa-tags",
+    "fas fa-receipt",
+    "fas fa-barcode",
+    "fas fa-cash-register",
+
+    // 🍔 Alimentação e Restaurantes
+    "fas fa-utensils",
+    "fas fa-wine-glass",
+    "fas fa-coffee",
+    "fas fa-hamburger",
+    "fas fa-pizza-slice",
+    "fas fa-ice-cream",
+    "fas fa-cookie",
+    "fas fa-carrot",
+    "fas fa-apple-alt",
+    "fas fa-drumstick-bite",
+    "fas fa-blender",
+    "fas fa-mug-hot",
+
+    // 🏥 Saúde e Medicamentos
+    "fas fa-hospital",
+    "fas fa-heartbeat",
+    "fas fa-pills",
+    "fas fa-first-aid",
+    "fas fa-notes-medical",
+    "fas fa-stethoscope",
+    "fas fa-tooth",
+    "fas fa-file-medical",
+    "fas fa-crutch",
+    "fas fa-vial",
+    "fas fa-syringe",
+    "fas fa-virus",
+
+    // 🎓 Educação e Cursos
+    "fas fa-graduation-cap",
+    "fas fa-book",
+    "fas fa-school",
+    "fas fa-university",
+    "fas fa-chalkboard-teacher",
+    "fas fa-pencil-alt",
+    "fas fa-laptop",
+    "fas fa-microscope",
+    "fas fa-atom",
+    "fas fa-flask",
+
+    // 📞 Comunicação e Tecnologia
+    "fas fa-mobile-alt",
+    "fas fa-laptop",
+    "fas fa-tablet-alt",
+    "fas fa-headset",
+    "fas fa-wifi",
+    "fas fa-sim-card",
+    "fas fa-microchip",
+    "fas fa-globe",
+    "fas fa-server",
+    "fas fa-ethernet",
+    "fas fa-satellite-dish",
+
+    // 🎉 Lazer e Entretenimento
+    "fas fa-film",
+    "fas fa-tv",
+    "fas fa-gamepad",
+    "fas fa-ticket-alt",
+    "fas fa-theater-masks",
+    "fas fa-music",
+    "fas fa-headphones",
+    "fas fa-popcorn",
+    "fas fa-dice",
+    "fas fa-chess",
+    "fas fa-camera-retro",
+
+    // 👗 Roupas e Estilo
+    "fas fa-tshirt",
+    "fas fa-shoe-prints",
+    "fas fa-hat-cowboy",
+    "fas fa-glasses",
+    "fas fa-ring",
+    "fas fa-shopping-bag",
+    "fas fa-gem",
+    "fas fa-socks",
+    "fas fa-hand-peace",
+
+    // 🐶 Pets e Cuidados
+    "fas fa-paw",
+    "fas fa-dog",
+    "fas fa-cat",
+    "fas fa-bone",
+    "fas fa-hospital",
+    "fas fa-fish",
+    "fas fa-carrot",
+    "fas fa-seedling",
+
+    // ✈️ Viagens e Turismo
+    "fas fa-plane",
+    "fas fa-globe",
+    "fas fa-passport",
+    "fas fa-hotel",
+    "fas fa-route",
+    "fas fa-map-marked-alt",
+    "fas fa-suitcase",
+    "fas fa-compass",
+    "fas fa-umbrella-beach",
+
+    // 💼 Trabalho e Negócios
+    "fas fa-briefcase",
+    "fas fa-building",
+    "fas fa-users",
+    "fas fa-handshake",
+    "fas fa-calendar-check",
+    "fas fa-id-badge",
+    "fas fa-network-wired",
+
+    // 🎁 Doações e Caridade
+    "fas fa-hands-helping",
+    "fas fa-hand-holding-heart",
+    "fas fa-donate",
+    "fas fa-heart",
+    "fas fa-gift",
+    "fas fa-box-heart",
+  ];
+
+    icons.forEach(iconClass => {
+        const iconElement = document.createElement("i");
+        iconElement.className = `fas ${iconClass} text-2xl cursor-pointer p-2 hover:bg-gray-200 rounded`;
+        iconElement.onclick = () => selectIcon(fieldName, iconClass);
+        iconContainer.appendChild(iconElement);
+    });
+
+    searchInput.addEventListener("input", function () {
+        const searchValue = this.value.toLowerCase();
+        const iconElements = iconContainer.getElementsByTagName("i");
+
+        Array.from(iconElements).forEach(icon => {
+            if (icon.className.includes(searchValue)) {
+                icon.style.display = "inline-block";
+            } else {
+                icon.style.display = "none";
+            }
+        });
+    });
+}
+
+// Selecionar ícone e atualizar campo de input
+function selectIcon(fieldName, iconClass) {
+    document.getElementById(`selected-icon-${fieldName}`).className = `${iconClass} text-2xl`;
+    document.getElementById(fieldName).value = iconClass;
+    document.getElementById(`icon-dropdown-${fieldName}`).classList.add("hidden"); // Fecha o dropdown
+}
+
+function setColorIcon(fieldName, color) {
+    document.getElementById(`selected-icon-${fieldName}`).style = `color: ${color}`;
+}
+
+// Expor funções globalmente
+window.toggleIconDropdown = toggleIconDropdown;
+window.loadIcons = loadIcons;
+window.selectIcon = selectIcon;
+window.setColorIcon = setColorIcon;
+
+async function openModal(mode, id = null) {
+    const modal = document.getElementById("crud-modal");
+    const form = document.getElementById("crud-form");
+    const title = document.getElementById("modal-title");
+    const saveBtn = document.getElementById("save-btn");
+    const deleteBtn = document.getElementById("delete-btn");
+    const entity = "{{ entity }}";
+
+    if (mode === 'add') {
+        title.innerText = "Adicionar Item";
+        form.action = `/${entity}`;
+        form.reset();
+        document.getElementById("item-id").value = "";
+        saveBtn.classList.remove("hidden");
+        deleteBtn.classList.add("hidden");
+        modal.classList.remove("hidden");
+        loadIcons("icon");
+    } else if (mode === 'edit') {
+        title.innerText = "Editar Item";
+        form.action = `/${entity}/${id}/edit`;
+        document.getElementById("item-id").value = id;
+        
+        try {
+            await loadEntity(id);
+            modal.classList.remove("hidden");  // 🔹 Agora o modal só abre após o carregamento dos dados
+        } catch (error) {
+            console.error("Erro ao carregar os dados:", error);
+            alert("Erro ao carregar os dados para edição.");
+        }
+
+        saveBtn.classList.remove("hidden");
+        deleteBtn.classList.remove("hidden");
+        loadIcons("icon");
+    } else if (mode === 'delete') {
+        if (!confirm("Tem certeza que deseja excluir este item?")) return;
+        form.action = `/${entity}/${id}/delete`;
+        form.submit();
+    }
+}
+
+async function loadEntity(id) {
+    console.log(`Carregando entidade com ID: ${id}`);  // ✅ Debug
+
+    const response = await fetch(`/{{ entity }}/${id}`);
+
+    if (!response.ok) {
+        throw new Error(`Erro ao buscar os dados: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log("Dados carregados:", data);  // ✅ Debug
+
+    {% for field in crud_schema %}
+        if (data["{{ field.name }}"] !== undefined) {
+            console.log(`Preenchendo campo: {{ field.name }} com valor:`, data["{{ field.name }}"]);  // ✅ Debug
+
+            if ("{{ field.type }}" === "boolean") {
+                const checkbox = document.getElementById("{{ field.name }}");
+                checkbox.checked = data["{{ field.name }}"];
+                toggleSwitchUI("{{ field.name }}", data["{{ field.name }}"]);
+            
+            } else if ("{{ field.type }}" === "combobox") {
+                const select = document.getElementById("{{ field.name }}");
+
+                // 🔹 Garante que o valor do banco está na lista de opções
+                let optionExists = Array.from(select.options).some(opt => opt.value == data["{{ field.name }}"]);
+                if (optionExists) {
+                    select.value = data["{{ field.name }}"];
+                } else {
+                    console.warn(`Valor "${data["{{ field.name }}"]}" não encontrado no combobox.`);
+                }
+            } else if ("{{ field.type }}" === "icons") {
+                selectIcon("{{ field.name }}", data["{{ field.name }}"]);
+                console.log("data:", data);
+                setColorIcon("{{ field.name }}", data["color"]);
+
+            } else {
+                document.getElementById("{{ field.name }}").value = data["{{ field.name }}"];
+            }
+        }
+    {% endfor %}
+}
+
+document.getElementById("color").addEventListener("input", function () {
+    setColorIcon("icon", this.value);
+});
+
+// Alterna o estado do switch e altera a UI
+function toggleSwitch(name) {
+    const checkbox = document.getElementById(name);
+    checkbox.checked = !checkbox.checked;
+    toggleSwitchUI(name, checkbox.checked);
+}
+
+// Atualiza a UI do switch
+function toggleSwitchUI(name, isChecked) {
+    const switchBg = document.getElementById(name).nextElementSibling;
+    const toggle = document.getElementById(name + "-toggle");
+
+    if (isChecked) {
+        switchBg.classList.add("active");
+        toggle.classList.add("move");
+    } else {
+        switchBg.classList.remove("active");
+        toggle.classList.remove("move");
+    }
+}
+
+// Fechar modal ao clicar em cancelar
+document.getElementById("cancel-btn").addEventListener("click", () => {
+    document.getElementById("crud-modal").classList.add("hidden");
+});
+</script>

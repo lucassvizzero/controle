@@ -1,0 +1,25 @@
+{% extends "base_auth.html" %}
+
+{% block title %}Login{% endblock %}
+{% block heading %}Login{% endblock %}
+
+{% block content %}
+{% if error %}
+<p class="text-red-500 text-center mb-4">{{ error }}</p>
+{% endif %}
+<form method="POST" action="/login" class="space-y-4">
+    <div>
+        <label for="username" class="block text-gray-700 font-medium">Usuário</label>
+        <input id="username" name="username" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    </div>
+    <div>
+        <label for="password" class="block text-gray-700 font-medium">Senha</label>
+        <input type="password" id="password" name="password" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    </div>
+    <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 font-semibold">Entrar</button>
+</form>
+{% endblock %}
+
+{% block footer %}
+Não tem uma conta? <a href="/register" class="text-blue-600 font-semibold hover:underline">Cadastre-se</a>
+{% endblock %}

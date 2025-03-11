@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block header %}{{ month_name }}{% endblock %}
+
+{% block content %}
+  {% include "components/alerts.html" %}
+
+  <!-- Navegação de Meses -->
+  <div class="flex items-center justify-center mb-4 space-x-4">
+    <a href="/?year={{ prev_year }}&month={{ prev_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}" class="bg-gray-300 px-3 py-1 rounded">&laquo; Mês Anterior</a>
+    <h2 class="text-xl font-semibold">
+      {{ month_name }}
+      <span class="text-sm text-gray-500">
+        ({{ start_date|strftime('%d/%m/%Y') }} a {{ end_date|strftime('%d/%m/%Y') }})
+      </span>
+    </h2>
+    <a href="/?year={{ next_year }}&month={{ next_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}" class="bg-gray-300 px-3 py-1 rounded">Próximo Mês &raquo;</a>
+  </div>
+
+  <!-- Resumos -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="bg-green-100 p-4 rounded shadow">
+      <p class="font-bold">Entrou</p>
+      <p class="text-2xl text-green-600">R$ {{ entrou|float|round(2) }}</p>
+    </div>
+    <div class="bg-red-100 p-4 rounded shadow">
+      <p class="font-bold">Saiu</p>
+      <p class="text-2xl text-red-600">R$ {{ saiu|float|round(2) }}</p>
+    </div>
+    <div class="bg-blue-100 p-4 rounded shadow">
+      <p class="font-bold">Sobrou</p>
+      <p class="text-2xl text-blue-600">R$ {{ sobrou|float|round(2) }}</p>
+    </div>
+    <div class="bg-yellow-100 p-4 rounded shadow">
+      <p class="font-bold">Orçamento</p>
+      <p class="text-2xl text-yellow-600">{{ orcamento_percent }}%</p>
+    </div>
+  </div>
+
+   <!-- Orçamentos -->
+   <h3 class="text-lg font-bold mb-2">Orçamentos do Período</h3>
+   <div class="grid grid-cols-3 gap-4 mb-6">
+     {% for parent in budgets_parent_info %}
+       <div class="bg-white p-4 shadow rounded relative">
+         <div class="flex items-center justify-between">
+           <div class="flex items-center space-x-2">
+             {% if parent.root_icon %}
+               <i class="{{ parent.root_icon }} text-xl" style="color: {{ parent.root_color or '#000' }}"></i>
+             {% endif %}
+             <span class="text-lg font-semibold">{{ parent.root_name }}</span>
+           </div>
+           <button class="text-blue-500 text-sm underline" onclick="openBudgetDetail({{ parent.root_id }})">Detalhes</button>
+         </div>
+         <p class="text-sm text-gray-500 mt-1">Limite: R$ {{ parent.total_limit|float|round(2) }}</p>
+         <p class="text-sm text-gray-500">Gasto: R$ {{ parent.total_spent|float|round(2) }}</p>
+         
+         <!-- Barra de progresso -->
+         <div class="w-full bg-gray-200 rounded h-4 mt-2 relative">
+           {% set bar_width = parent.progress if parent.progress < 100 else 100 %}
+           <div class="h-4 rounded" style="width: {{ bar_width }}%; background-color: {{ progress_color(parent.progress) }}"></div>
+         </div>
+         <p class="text-sm text-gray-600 mt-1">{{ parent.progress }}%</p>
+       </div>
+     {% else %}
+       <p class="text-center text-gray-500 col-span-3">Nenhum orçamento encontrado</p>
+     {% endfor %}
+   </div>
+ 
+   <!-- Modal de Detalhes -->
+   <div id="budget-detail-modal"
+     class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
+     style="z-index: 9999;"
+     onclick="closeBudgetDetail(event)">
+    <div id="modal-content"
+        class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative overflow-y-auto max-h-[80vh]"
+        onclick="event.stopPropagation()">
+        <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg" onclick="closeBudgetDetail()">✖</button>
+        <h2 id="detail-modal-title" class="text-xl font-bold mb-4 text-center">Detalhes</h2>
+        <div id="detail-modal-content" class="space-y-2">
+        <!-- Os detalhes dos orçamentos serão carregados aqui -->
+        </div>
+    </div>
+    </div>
+
+  <!-- Transações: Paginação e Botão "Marcar como Paga" -->
+  <div class="grid grid-cols-2 gap-6">
+    <!-- Transações Efetuadas -->
+    <div>
+      <h3 class="text-lg font-bold mb-2">Transações Efetuadas</h3>
+      <table class="min-w-full border">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="p-2 border">Categoria</th>
+            <th class="p-2 border">Descrição</th>
+            <th class="p-2 border">Data</th>
+            <th class="p-2 border text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transacoes_efetuadas %}
+            {% if t.category.type == "expense" %}
+              {% set row_class = "bg-red-100" %}
+            {% elif t.category.type == "transfer" %}
+              {% set row_class = "bg-gray-100" %}
+            {% else %}
+              {% set row_class = "bg-green-100" %}
+            {% endif %}
+            <tr class="{{ row_class }}">
+              <td class="p-2 border"> <i class='{{t.category.icon}} text-xl' style='color:{{t.category.color}}'></i> {{t.category.name}}</td>
+              <td class="p-2 border">{{ t.description }}</td>
+              <td class="p-2 border">{{ t.paid_at|strftime('%d/%m/%Y') }}</td>
+              <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3" class="p-2 border text-center text-gray-500">Nenhuma transação efetuada</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <!-- Paginação para transações efetuadas -->
+      <div class="flex justify-between mt-2">
+        {% if paid_page > 1 %}
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
+        {% endif %}
+        <span>Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }}</span>
+        {% if total_paid > paid_page * paid_per_page %}
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Transações Pendentes -->
+    <div>
+      <h3 class="text-lg font-bold mb-2">Transações Pendentes</h3>
+      <table class="min-w-full border">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="p-2 border">Categoria</th>
+            <th class="p-2 border">Descrição</th>
+            <th class="p-2 border">Vencimento</th>
+            <th class="p-2 border text-right">Valor</th>
+            <th class="p-2 border">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transacoes_pendentes %}
+            {% if t.due_day == current_date %}
+              {% set row_class = "bg-orange-100" %}
+            {% elif t.due_day < current_date %}
+              {% set row_class = "bg-orange-300" %}
+            {% else %}
+              {% set row_class = "" %}
+            {% endif %}
+            <tr class="{{ row_class }}">
+                <td class="p-2 border"> <i class='{{t.category.icon}} text-xl' style='color:{{t.category.color}}'></i> {{t.category.name}}</td>
+              <td class="p-2 border">{{ t.description }}</td>
+              <td class="p-2 border">{{ t.due_day|strftime('%d/%m/%Y') }}</td>
+              <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
+              <td class="p-2 border text-center">
+                <form action="/transactions/{{ t.id }}/mark_paid" method="post">
+                  <button type="submit" class="bg-blue-500 text-white px-2 py-1 rounded">Marcar como Paga</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="4" class="p-2 border text-center text-gray-500">Nenhuma transação pendente</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <!-- Paginação para transações pendentes -->
+      <div class="flex justify-between mt-2">
+        {% if pending_page > 1 %}
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
+        {% endif %}
+        <span>Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }}</span>
+        {% if total_pending > pending_page * pending_per_page %}
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <script>
+    // Objeto em JS com todos os budgets detalhados
+    const budgetsParentInfo = {{ budgets_parent_info|tojson }};
+
+    function openBudgetDetail(rootId) {
+      const modal = document.getElementById("budget-detail-modal");
+      const content = document.getElementById("detail-modal-content");
+      content.innerHTML = "";
+
+      const parentObj = budgetsParentInfo.find(p => p.root_id === rootId);
+      if (!parentObj) {
+        content.innerHTML = "<p class='text-red-500'>Nenhum detalhe encontrado.</p>";
+        modal.classList.remove("hidden");
+        return;
+      }
+
+      const title = document.getElementById("detail-modal-title");
+      title.textContent = `Detalhes: ${parentObj.root_name}`;
+
+      parentObj.items.forEach(item => {
+        const itemLimit = item.limit_value.toFixed(2);
+        const itemSpent = item.spent_value.toFixed(2);
+        let itemProgress = itemLimit > 0 ? ((itemSpent / itemLimit) * 100).toFixed(1) : 0;
+        const barColor = progressColor(itemProgress);
+
+        content.innerHTML += `
+          <div class="border p-2 rounded mb-2">
+            <div class="flex items-center space-x-2">
+              <i class="${item.cat_icon || 'fas fa-folder'} text-xl" style="color:${item.cat_color || '#999'}"></i>
+              <span class="font-bold">${item.cat_name}</span>
+            </div>
+            <p>Limite: R$ ${itemLimit}</p>
+            <p>Gasto: R$ ${itemSpent}</p>
+            <div class="w-full bg-gray-200 rounded h-3 mt-1">
+              <div class="h-3 rounded" style="width:${Math.min(itemProgress,100)}%; background-color:${barColor};"></div>
+            </div>
+            <small class="text-gray-600">${itemProgress}%</small>
+          </div>
+        `;
+      });
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeBudgetDetail() {
+      const modal = document.getElementById("budget-detail-modal");
+      modal.classList.add("hidden");
+    }
+
+    function progressColor(progress) {
+      if (progress <= 100) {
+        const ratio = progress / 100;
+        const r = Math.round((1 - ratio) * 173 + ratio * 0);
+        const g = Math.round((1 - ratio) * 216 + ratio * 255);
+        const b = Math.round((1 - ratio) * 230 + ratio * 0);
+        return `rgb(${r},${g},${b})`;
+      } else {
+        const excess = Math.min(progress, 150) - 100;
+        const ratio = excess / 50;
+        const r = Math.round((1 - ratio) * 0 + ratio * 139);
+        const g = Math.round((1 - ratio) * 255 + ratio * 0);
+        return `rgb(${r},${g},0)`;
+      }
+    }
+  </script>
+{% endblock %}
+
+

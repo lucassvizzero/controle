@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Contas{% endblock %}
+{% block header %}Contas Bancárias{% endblock %}
+
+{% block content %}
+    {% include "components/alerts.html" %}
+    {% include "components/datagrid.html" %}
+    {% include "components/crud_modal.html" %}
+    {% include "components/upload_modal.html" %}
+{% endblock %}
