@@ -337,10 +337,15 @@ window.selectIcon = selectIcon;
 window.setColorIcon = setColorIcon;
 
 async function openModal(mode, id = null) {
+    
     const modal = document.getElementById("crud-modal");
     const form = document.getElementById("crud-form");
     const title = document.getElementById("modal-title");
     const saveBtn = document.getElementById("save-btn");
+    const cancelBtn = document.getElementById("cancel-btn");
+    cancelBtn.addEventListener("click", () => {
+        document.getElementById("crud-modal").classList.add("hidden");
+    });
     const deleteBtn = document.getElementById("delete-btn");
     const entity = "{{ entity }}";
 

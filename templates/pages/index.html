@@ -99,15 +99,15 @@
         </thead>
         <tbody>
           {% for t in transacoes_efetuadas %}
-            {% if t.category.type == "expense" %}
+            {% if t.category_type == "expense" %}
               {% set row_class = "bg-red-100" %}
-            {% elif t.category.type == "transfer" %}
+            {% elif t.category_type == "transfer" %}
               {% set row_class = "bg-gray-100" %}
             {% else %}
               {% set row_class = "bg-green-100" %}
             {% endif %}
             <tr class="{{ row_class }}">
-              <td class="p-2 border"> <i class='{{t.category.icon}} text-xl' style='color:{{t.category.color}}'></i> {{t.category.name}}</td>
+              <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
               <td class="p-2 border">{{ t.description }}</td>
               <td class="p-2 border">{{ t.paid_at|strftime('%d/%m/%Y') }}</td>
               <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
@@ -124,7 +124,7 @@
         {% if paid_page > 1 %}
           <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
         {% endif %}
-        <span>Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }}</span>
+        <span>Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }} ({{ total_paid }} registros)</span>
         {% if total_paid > paid_page * paid_per_page %}
           <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
         {% endif %}
@@ -141,7 +141,7 @@
             <th class="p-2 border">Descrição</th>
             <th class="p-2 border">Vencimento</th>
             <th class="p-2 border text-right">Valor</th>
-            <th class="p-2 border">Ação</th>
+            <th class="p-2 border">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -154,15 +154,37 @@
               {% set row_class = "" %}
             {% endif %}
             <tr class="{{ row_class }}">
-                <td class="p-2 border"> <i class='{{t.category.icon}} text-xl' style='color:{{t.category.color}}'></i> {{t.category.name}}</td>
+                <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
               <td class="p-2 border">{{ t.description }}</td>
               <td class="p-2 border">{{ t.due_day|strftime('%d/%m/%Y') }}</td>
               <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
               <td class="p-2 border text-center">
-                <form action="/transactions/{{ t.id }}/mark_paid" method="post">
-                  <button type="submit" class="bg-blue-500 text-white px-2 py-1 rounded">Marcar como Paga</button>
-                </form>
-              </td>
+                <div class="flex flex-col items-center space-y-1">
+                    {% if t.is_card_invoice %}
+                        <form action="/cards/pay_invoice" method="post">
+                            <input type="hidden" name="transaction_ids" value="{{ t.transactions | map(attribute='id') | join(',') }}">
+                            {% if t.close_day < current_date %}
+                              <button type="submit"
+                                  class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                                  💳 Pagar
+                              </button>
+                            {% endif %}
+                        </form>
+                        <button onclick='openInvoiceDetail({{ t.transactions | tojson }})'
+                            class="bg-gray-500 text-white px-3 py-1 rounded text-sm opacity-80 hover:opacity-100 transition">
+                            🔍 Ver
+                        </button>
+                        
+                    {% else %}
+                        <form action="/transactions/{{ t.id }}/mark_paid" method="post">
+                            <button type="submit"
+                                class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                                💰 Pagar
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </td>
             </tr>
           {% else %}
             <tr>
@@ -176,16 +198,69 @@
         {% if pending_page > 1 %}
           <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
         {% endif %}
-        <span>Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }}</span>
+        <span>Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }}  ({{ total_pending }} registros)</span>
         {% if total_pending > pending_page * pending_per_page %}
           <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
         {% endif %}
       </div>
     </div>
   </div>
+  
+  <div id="invoice-detail-modal"
+      class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
+      style="z-index: 9999;"
+      onclick="closeInvoiceDetail(event)">
+      <div id="invoice-modal-content"
+          class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative overflow-y-auto max-h-[80vh]"
+          onclick="event.stopPropagation()">
+          <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg" onclick="closeInvoiceDetail()">✖</button>
+          <h2 id="invoice-modal-title" class="text-xl font-bold mb-4 text-center">Detalhes da Fatura</h2>
+          <table class="min-w-full border">
+              <thead class="bg-gray-200">
+                  <tr>
+                      <th class="p-2 border">Descrição</th>
+                      <th class="p-2 border">Vencimento</th>
+                      <th class="p-2 border text-right">Valor</th>
+                  </tr>
+              </thead>
+              <tbody id="invoice-modal-content-body">
+                  <!-- Transações da fatura serão carregadas aqui -->
+              </tbody>
+          </table>
+      </div>
+  </div>
   <script>
+
+function openInvoiceDetail(transactions) {
+        if (!transactions || transactions.length === 0) {
+            alert("Nenhuma transação encontrada.");
+            return;
+        }
+
+        const modal = document.getElementById("invoice-detail-modal");
+        const contentBody = document.getElementById("invoice-modal-content-body");
+
+        contentBody.innerHTML = "";  // Limpa o conteúdo anterior
+
+        transactions.forEach(t => {
+            contentBody.innerHTML += `
+                <tr>
+                    <td class="p-2 border">${t.description}</td>
+                    <td class="p-2 border">${new Date(t.due_day).toLocaleDateString('pt-BR')}</td>
+                    <td class="p-2 border text-right">R$ ${t.value.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        modal.classList.remove("hidden");
+    }
+
+    function closeInvoiceDetail() {
+        document.getElementById("invoice-detail-modal").classList.add("hidden");
+    }
+
     // Objeto em JS com todos os budgets detalhados
-    const budgetsParentInfo = {{ budgets_parent_info|tojson }};
+    const budgetsParentInfo = {{ budgets_parent_info | tojson }};
 
     function openBudgetDetail(rootId) {
       const modal = document.getElementById("budget-detail-modal");

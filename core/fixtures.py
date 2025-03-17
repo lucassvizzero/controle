@@ -1,10 +1,7 @@
-import random
-from datetime import date, timedelta
-
 from passlib.context import CryptContext
 
 from core.database import get_db
-from core.models import Account, Budget, Card, Category, Transaction, User
+from core.models import Account, Card, Category, User
 from core.schemas import BankName, BrandName
 
 
@@ -71,7 +68,7 @@ def fixtures():
         ),
         Card(
             user_id=user.id,
-            account_id=accounts[1].id,
+            account_id=accounts[2].id,
             name="C6 Carbon",
             brand=BrandName.mastercard,
             close_day=14,
@@ -148,6 +145,7 @@ def fixtures():
         icon="fas fa-concierge-bell",
         color="#9E9D24",
     )
+
     # 9. Assinaturas (despesa)
     cat_assinaturas = Category(
         user_id=user.id,
@@ -188,6 +186,13 @@ def fixtures():
         icon="fas fa-minus-circle",
         color="#F44336",
     )
+    cat_banco = Category(
+        user_id=user.id,
+        name="Banco",
+        type="expense",
+        icon="fas fa-university",
+        color="#FF5722",
+    )
 
     parent_categories = [
         cat_salario,
@@ -203,6 +208,7 @@ def fixtures():
         cat_lazer,
         cat_outras_entradas,
         cat_outras_saidas,
+        cat_banco,
     ]
     db.add_all(parent_categories)
     db.commit()
@@ -645,84 +651,210 @@ def fixtures():
             color="#880E4F",
             parent_id=cat_lazer.id,
         ),
+        # Banco
+        Category(
+            user_id=user.id,
+            name="Tarifa Cartão",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Tarifa Conta",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Juros",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Impostos",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="SimplesNacional",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Seguro",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_banco.id,
+        ),
     ]
     db.add_all(subcategories)
     db.commit()
 
-    # Criar transações aleatórias para todas as categorias (pais e subcategorias)
-    transactions = [
-        Transaction(
-            user_id=user.id,
-            account_id=accounts[0].id,
-            category_id=parent_categories[0].id,
-            description=f"Movimentação para {parent_categories[0].name}",
-            value=25000,
-            due_day=date.today(),
-            paid_at=date.today(),
-            is_recurring=False,
-        )
-    ]
-    for _ in range(60):
-        account = random.choice(accounts)
-        category = random.choice(parent_categories + subcategories)
-        if category.type == "income":
-            continue
+    # # Criar transações aleatórias para todas as categorias (pais e subcategorias)
+    # transactions = [
+    #     Transaction(
+    #         user_id=user.id,
+    #         account_id=accounts[0].id,
+    #         category_id=parent_categories[0].id,
+    #         description=f"Movimentação para {parent_categories[0].name}",
+    #         value=25000,
+    #         due_day=date.today(),
+    #         paid_at=datetime.now(),
+    #         is_recurring=False,
+    #     )
+    # ]
+    # for _ in range(60):
+    #     account = random.choice(accounts)
+    #     category = random.choice(parent_categories + subcategories)
+    #     if category.type == "income":
+    #         continue
 
-        amount = round(random.uniform(50, 1000), 2)
-        available_cards = [c.id for c in cards if c.account_id == account.id]
-        card_id = random.choice(available_cards) if available_cards else None
+    #     amount = round(random.uniform(50, 1000), 2)
+    #     available_cards = [c.id for c in cards if c.account_id == account.id] + [None]
 
-        transaction = Transaction(
-            user_id=user.id,
-            account_id=account.id,
-            card_id=card_id,
-            category_id=category.id,
-            description=f"Movimentação para {category.name}",
-            value=amount,
-            due_day=date.today() - timedelta(days=random.randint(0, 30)),
-            paid_at=(
-                date.today() - timedelta(days=random.randint(1, 10))
-                if random.choice([True, True, True, False])
-                else None
-            ),
-            is_recurring=random.choice([True, False]),
-            recurring_frequency=(
-                random.choice(["mensal", "trimestral", "anual"])
-                if random.choice([True, False])
-                else None
-            ),
-        )
-        transactions.append(transaction)
-    db.add_all(transactions)
-    db.commit()
+    #     card_id = random.choice(available_cards) if available_cards else None
+    #     is_recurring = random.choice([True, False])
+    #     recurring_frequency = random.choice(["mensal", "semanal"]) if is_recurring else None
+    #     installments = random.choice([3, 6, 10, 12]) if card_id else None
+    #     current_installment = (
+    #         random.choice([x for x in range(1, installments + 1)]) if installments else None
+    #     )
+    #     transaction = Transaction(
+    #         user_id=user.id,
+    #         account_id=account.id,
+    #         card_id=card_id,
+    #         category_id=category.id,
+    #         description=(
+    #             f"Movimentação para {category.name}"
+    #             if not card_id
+    #             else f"Parcela {current_installment}/{installments} de {category.name}"
+    #         ),
+    #         value=amount,
+    #         due_day=date.today() - timedelta(days=random.randint(-5, 15)),
+    #         paid_at=(
+    #             datetime.now() - timedelta(days=random.randint(0, 15))
+    #             if not card_id and random.choice([True, True, True, False])
+    #             else None
+    #         ),
+    #         is_recurring=is_recurring,
+    #         recurring_frequency=recurring_frequency,
+    #         installments=installments,
+    #         current_installment=current_installment,
+    #     )
+    #     transactions.append(transaction)
+    #     if is_recurring:
+    #         print(f"Transação recorrente: {transaction.description}")
+    #         if not installments and recurring_frequency == "mensal":
 
-    # Criar orçamentos (budgets) para categorias de despesa
-    today = date.today()
-    budget_month = date(today.year, today.month, 1)
-    budgets_list = []
-    # Orçamento para cada categoria principal de despesa
-    for cat in parent_categories:
-        if cat.type == "expense":
-            limit = round(random.uniform(500, 5000), 2)
-            budget = Budget(
-                user_id=user.id,
-                category_id=cat.id,
-                limit_value=limit,
-                month=budget_month,
-            )
-            budgets_list.append(budget)
-    # Orçamento para cada subcategoria de despesa
-    for cat in subcategories:
-        if cat.type == "expense":
-            limit = round(random.uniform(100, 1000), 2)
-            budget = Budget(
-                user_id=user.id,
-                category_id=cat.id,
-                limit_value=limit,
-                month=budget_month,
-            )
-            budgets_list.append(budget)
-    db.add_all(budgets_list)
-    db.commit()
+    #             for _ in range(1, 6):
+    #                 last_transaction = transactions[-1]
+    #                 transaction = Transaction(
+    #                     user_id=user.id,
+    #                     account_id=account.id,
+    #                     card_id=card_id,
+    #                     category_id=category.id,
+    #                     description=f"Movimentação para {category.name}",
+    #                     value=amount,
+    #                     due_day=last_transaction.due_day + timedelta(days=30),
+    #                     paid_at=None,
+    #                     is_recurring=is_recurring,
+    #                     recurring_frequency=recurring_frequency,
+    #                     installments=installments,
+    #                     current_installment=current_installment,
+    #                     parent_id=last_transaction.id,
+    #                 )
+    #                 transactions.append(transaction)
+    #         elif not installments and recurring_frequency == "semanal":
+    #             print(f"Transação semanal: {transaction.description}")
+    #             for _ in range(1, 24):
+    #                 last_transaction = transactions[-1]
+    #                 transaction = Transaction(
+    #                     user_id=user.id,
+    #                     account_id=account.id,
+    #                     card_id=card_id,
+    #                     category_id=category.id,
+    #                     description=f"Movimentação para {category.name}",
+    #                     value=amount,
+    #                     due_day=last_transaction.due_day + timedelta(days=7),
+    #                     paid_at=None,
+    #                     is_recurring=is_recurring,
+    #                     recurring_frequency=recurring_frequency,
+    #                     installments=installments,
+    #                     current_installment=current_installment,
+    #                     parent_id=last_transaction.id,
+    #                 )
+    #                 transactions.append(transaction)
+    #         elif installments:
+    #             if current_installment < installments:
+    #                 for new_current_installment in range(current_installment + 1, installments + 1):
+    #                     last_transaction = transactions[-1]
+    #                     print(
+    #                         "Transação parcelada: Parcela"
+    #                         f" {new_current_installment}/{installments} de {category.name}"
+    #                     )
+    #                     transaction = Transaction(
+    #                         user_id=user.id,
+    #                         account_id=account.id,
+    #                         card_id=card_id,
+    #                         category_id=category.id,
+    #                         description=(
+    #                             f"Parcela {new_current_installment}/{installments} de"
+    #                             f" {category.name}"
+    #                         ),
+    #                         value=amount,
+    #                         due_day=last_transaction.due_day + timedelta(days=30),
+    #                         paid_at=None,
+    #                         is_recurring=is_recurring,
+    #                         recurring_frequency=recurring_frequency,
+    #                         installments=installments,
+    #                         current_installment=new_current_installment,
+    #                         parent_id=last_transaction.id,
+    #                     )
+    #                     transactions.append(transaction)
+    # db.add_all(transactions)
+    # db.commit()
+
+    # # Criar orçamentos (budgets) para categorias de despesa
+    # today = date.today()
+    # budget_month = date(today.year, today.month, 1)
+    # budgets_list = []
+    # # Orçamento para cada categoria principal de despesa
+    # for cat in parent_categories:
+    #     if cat.type == "expense":
+    #         limit = round(random.uniform(500, 5000), 2)
+    #         budget = Budget(
+    #             user_id=user.id,
+    #             category_id=cat.id,
+    #             limit_value=limit,
+    #             month=budget_month,
+    #         )
+    #         budgets_list.append(budget)
+    # # Orçamento para cada subcategoria de despesa
+    # for cat in subcategories:
+    #     if cat.type == "expense":
+    #         limit = round(random.uniform(100, 1000), 2)
+    #         budget = Budget(
+    #             user_id=user.id,
+    #             category_id=cat.id,
+    #             limit_value=limit,
+    #             month=budget_month,
+    #         )
+    #         budgets_list.append(budget)
+    # db.add_all(budgets_list)
+    # db.commit()
 
     print("Fixtures criadas com sucesso!")

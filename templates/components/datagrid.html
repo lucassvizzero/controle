@@ -11,9 +11,9 @@
     <div class="grid grid-cols-3 gap-4">
       {% for field in filter_schema %}
         <div>
-          <label class="block font-medium text-sm mb-1" for="{{ field.name }}">{{ field.label }}</label>
+          <label class="block font-medium text-sm mb-1" for="f_{{ field.name }}">{{ field.label }}</label>
           {% if field.type == "combobox" %}
-            <select name="{{ field.name }}" id="{{ field.name }}" class="w-full p-2 border rounded">
+            <select name="f_{{ field.name }}" id="f_{{ field.name }}" class="w-full p-2 border rounded">
               <option value="">-- Todos --</option>
               {% for opt in field.options %}
                 <option value="{{ opt.value }}" {% if request.query_params.get(field.name) == (opt.value|string) %}selected{% endif %}>
@@ -22,10 +22,10 @@
               {% endfor %}
             </select>
           {% elif field.type == "date" %}
-            <input type="date" name="{{ field.name }}" class="w-full p-2 border rounded"
+            <input type="date" name="f_{{ field.name }}" class="w-full p-2 border rounded"
                    value="{{ request.query_params.get(field.name, '') }}">
           {% else %}
-            <input type="{{ field.type }}" name="{{ field.name }}" class="w-full p-2 border rounded"
+            <input type="{{ field.type }}" name="f_{{ field.name }}" class="w-full p-2 border rounded"
                    value="{{ request.query_params.get(field.name, '') }}">
           {% endif %}
         </div>

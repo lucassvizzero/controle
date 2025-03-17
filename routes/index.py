@@ -1,14 +1,16 @@
+import calendar
+import json
 from collections import defaultdict
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import desc, func
+from sqlalchemy import and_, desc, func, or_
 from sqlalchemy.orm import Session
 
 from core.database import get_db
-from core.models import Budget, Category, Transaction
-from core.schemas import CategoryType
+from core.models import Budget, Card, Category, Transaction
+from core.schemas import CategoryType, TransactionIndexOut
 from core.templates import templates
 from core.utils import alert_error, alert_success, get_alerts
 from routes.auth import get_current_user
@@ -29,6 +31,9 @@ month_translation = {
 }
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+FIRST_DAY_OF_MONTH = 20
+LAST_DAY_OF_MONTH = 19
 
 
 # Adiciona a função progress_color aos globals do Jinja para que ela fique disponível nos templates.
@@ -72,15 +77,170 @@ def shift_month(year: int, month: int, delta: int):
 
 
 def get_period_range(year: int, month: int):
-    if month == 1:
-        prev_month = 12
-        prev_year = year - 1
+    if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
+        prev_year, prev_month = shift_month(year, month, -1)
+        _, last_day = calendar.monthrange(prev_year, prev_month)
+        start_date = date(
+            prev_year,
+            prev_month,
+            FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day,
+        )
     else:
-        prev_month = month - 1
-        prev_year = year
-    start_date = date(prev_year, prev_month, 20)
-    end_date = date(year, month, 19)
+        _, last_day = calendar.monthrange(year, month)
+        start_date = date(
+            year, month, FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day
+        )
+
+    _, last_day = calendar.monthrange(year, month)
+    end_date = date(year, month, LAST_DAY_OF_MONTH if LAST_DAY_OF_MONTH <= last_day else last_day)
     return start_date, end_date
+
+
+def convert_index_transactions(transactions):
+    cards = {}
+    remake_transactions = []
+    for t in transactions:
+        if t.card_id:
+            if t.card_id not in cards:
+                cards[t.card_id] = {
+                    "card_id": t.card_id,
+                    "card_name": t.card.name,
+                    "card_brand": t.card.brand,
+                    "card_due_day": t.card.due_day,
+                    "card_close_day": t.card.close_day,
+                    "transactions": [],
+                }
+            cards[t.card_id]["transactions"].append(
+                TransactionIndexOut(
+                    id=t.id,
+                    category_name=t.category.name,
+                    category_type=t.category.type,
+                    category_icon=t.category.icon,
+                    category_color=t.category.color,
+                    description=t.description,
+                    value=t.value,
+                    due_day=t.due_day,
+                    paid_at=t.paid_at,
+                    is_card_invoice=False,
+                    transactions=None,
+                )
+            )
+        else:
+            remake_transactions.append(
+                TransactionIndexOut(
+                    id=t.id,
+                    category_name=t.category.name,
+                    category_type=t.category.type,
+                    category_icon=t.category.icon,
+                    category_color=t.category.color,
+                    description=t.description,
+                    value=t.value,
+                    due_day=t.due_day,
+                    paid_at=t.paid_at,
+                    is_card_invoice=False,
+                    transactions=None,
+                )
+            )
+    card_invoices = []
+
+    for card in cards.values():
+        card["transactions"] = sorted(card["transactions"], key=lambda t: t.due_day)
+        tmp_card_invoices = {}
+        for card_transaction in card["transactions"]:
+            month_card = card_transaction.due_day.month
+            year_card = card_transaction.due_day.year
+            if card_transaction.due_day.day > card["card_close_day"]:
+                year_card, month_card = shift_month(
+                    card_transaction.due_day.year, card_transaction.due_day.month, 1
+                )
+
+            _, last_day = calendar.monthrange(year_card, month_card)
+            due_day = date(
+                year_card,
+                month_card,
+                card["card_due_day"] if card["card_due_day"] <= last_day else last_day,
+            )
+            close_day = date(
+                year_card,
+                month_card,
+                card["card_close_day"] if card["card_close_day"] <= last_day else last_day,
+            )
+            month_card_name = due_day.strftime("%B/%Y").title()
+            month_card_name = month_card_name.replace(
+                month_card_name.split("/")[0], month_translation[month_card_name.split("/")[0]]
+            )
+
+            if card_transaction.paid_at:
+                if month_card_name + "-paid" not in tmp_card_invoices:
+                    tmp_card_invoices[month_card_name + "-paid"] = TransactionIndexOut(
+                        category_name="Fatura",
+                        category_type="expense",
+                        category_icon="fas fa-credit-card",
+                        category_color="#FF5722",
+                        description=f"Fatura {card['card_name']} - {month_card_name}",
+                        value=card_transaction.value,
+                        due_day=due_day,
+                        close_day=close_day,
+                        paid_at=card_transaction.paid_at,
+                        is_card_invoice=True,
+                        transactions=[json.loads(card_transaction.model_dump_json())],
+                    )
+                else:
+                    tmp_card_invoices[month_card_name + "-paid"].value += card_transaction.value
+                    tmp_card_invoices[month_card_name + "-paid"].transactions.append(
+                        json.loads(card_transaction.model_dump_json())
+                    )
+            else:
+                if month_card_name not in tmp_card_invoices:
+                    tmp_card_invoices[month_card_name] = TransactionIndexOut(
+                        category_name="Fatura",
+                        category_type="expense",
+                        category_icon="fas fa-credit-card",
+                        category_color="#FF5722",
+                        description=f"Fatura {card['card_name']} - {month_card_name}",
+                        value=card_transaction.value,
+                        due_day=due_day,
+                        close_day=close_day,
+                        paid_at=None,
+                        is_card_invoice=True,
+                        transactions=[json.loads(card_transaction.model_dump_json())],
+                    )
+                else:
+                    tmp_card_invoices[month_card_name].value += card_transaction.value
+                    tmp_card_invoices[month_card_name].transactions.append(
+                        json.loads(card_transaction.model_dump_json())
+                    )
+        card_invoices += list(tmp_card_invoices.values())
+    return card_invoices + remake_transactions
+
+
+def make_pagination(transacoes, page, per_page):
+    """
+    Retorna uma fatia da lista `transacoes` de acordo com a paginação especificada.
+
+    Args:
+        transacoes (list): Lista de transações a serem paginadas.
+        page (int): Número da página (deve ser maior que 0).
+        per_page (int): Número de itens por página (deve ser maior que 0).
+
+    Returns:
+        list: Sublista contendo os itens da página solicitada.
+    """
+    # Garantir que transacoes é uma lista ou estrutura indexável
+    if not isinstance(transacoes, (list, tuple)):
+        raise ValueError("O parâmetro 'transacoes' deve ser uma lista ou tupla.")
+
+    # Garantir que page e per_page são inteiros positivos
+    if not isinstance(page, int) or not isinstance(per_page, int):
+        raise ValueError("Os parâmetros 'page' e 'per_page' devem ser números inteiros.")
+    if page < 1 or per_page < 1:
+        return []  # Retorna lista vazia para entradas inválidas
+
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    # Evita erro de índice fora do limite
+    return transacoes[start:end] if start < len(transacoes) else []
 
 
 @router.get("/")
@@ -99,7 +259,7 @@ def get_index(
     if not year or not month:
         today = date.today()
         year, month = today.year, today.month
-        if today.day >= 20:
+        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH and today.day >= FIRST_DAY_OF_MONTH:
             year, month = shift_month(year, month, -1)
 
     start_date, end_date = get_period_range(year, month)
@@ -120,24 +280,62 @@ def get_index(
         .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
         .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
     )
-    total_paid = paid_query.count()
     transacoes_efetuada_all = paid_query.all()
-    transacoes_efetuadas = (
-        paid_query.offset((paid_page - 1) * paid_per_page).limit(paid_per_page).all()
-    )
+    transacoes_efetuadas = convert_index_transactions(transacoes_efetuada_all)
+    total_paid = len(transacoes_efetuadas)
+    transacoes_efetuadas = make_pagination(transacoes_efetuadas, paid_page, paid_per_page)
+    cards = db.query(Card).filter(Card.user_id == user.id).all()
 
+    query_or = [
+        and_(
+            Transaction.card_id.is_(None),
+            Transaction.due_day >= start_date,
+            Transaction.due_day <= end_date,
+        )
+    ]
+    for card in cards:
+        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
+            if card.due_day < FIRST_DAY_OF_MONTH:
+                year_card, month_card = shift_month(year, month, -1)
+            else:
+                year_card, month_card = shift_month(year, month, -2)
+        else:
+            if card.due_day < FIRST_DAY_OF_MONTH:
+                year_card, month_card = year, month
+            else:
+                year_card, month_card = shift_month(year, month, -1)
+
+        _, last_day = calendar.monthrange(year_card, month_card)
+        open_invoice = card.close_day if card.close_day <= last_day else last_day
+        invoice_start_date = date(year_card, month_card, open_invoice)
+
+        if (card.close_day - 1) > 0:
+            year_card_end, month_card_end = shift_month(year_card, month_card, 1)
+            _, last_day = calendar.monthrange(year_card_end, month_card_end)
+            close_invoice = (card.close_day - 1) if (card.close_day - 1) <= last_day else last_day
+            invoice_end_date = date(year_card_end, month_card_end, close_invoice)
+        else:
+            invoice_end_date = date(year_card, month_card, last_day)
+        query_or.append(
+            and_(
+                Transaction.card_id == card.id,
+                Transaction.due_day >= invoice_start_date,
+                Transaction.due_day <= invoice_end_date,
+            )
+        )
     # Transações Pendentes com paginação
     pending_query = (
         db.query(Transaction)
         .filter(Transaction.user_id == user.id)
-        .filter(Transaction.due_day >= start_date, Transaction.due_day <= end_date)
         .filter(Transaction.paid_at.is_(None))
+        .filter(or_(*query_or))
         .order_by(desc(Transaction.due_day))
     )
-    total_pending = pending_query.count()
-    transacoes_pendentes = (
-        pending_query.offset((pending_page - 1) * pending_per_page).limit(pending_per_page).all()
-    )
+
+    transacoes_pendente_all = pending_query.all()
+    transacoes_pendentes = convert_index_transactions(transacoes_pendente_all)
+    total_pending = len(transacoes_pendentes)
+    transacoes_pendentes = make_pagination(transacoes_pendentes, paid_page, paid_per_page)
 
     # Resumos
     entrou = sum(t.value for t in transacoes_efetuada_all if t.category.type == CategoryType.income)
@@ -267,7 +465,28 @@ def mark_transaction_paid(
     if not transaction:
         alert_error(request, "Transação não encontrada")
         return RedirectResponse(url="/", status_code=303)
-    transaction.paid_at = date.today()
+    transaction.paid_at = datetime.now()
     db.commit()
     alert_success(request, "Transação marcada como paga!")
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/cards/pay_invoice")
+def pay_card_invoice(
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+    transaction_ids: str = Form(...),
+):
+    transaction_ids = [int(x) for x in transaction_ids.split(",")]
+    transactions = (
+        db.query(Transaction)
+        .filter(Transaction.id.in_(transaction_ids), Transaction.user_id == user.id)
+        .all()
+    )
+    paid_at = datetime.now()
+    for t in transactions:
+        t.paid_at = paid_at
+    db.commit()
+    alert_success(request, "Fatura paga com sucesso!")
     return RedirectResponse(url="/", status_code=303)

@@ -1,9 +1,13 @@
-import csv
-from datetime import date
-from io import StringIO
+import calendar
+import io
+from datetime import date, datetime, timedelta
 
+import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
+from openpyxl.styles import NamedStyle
+from openpyxl.utils import quote_sheetname
+from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
@@ -17,7 +21,6 @@ from core.schemas import (
     FilterField,
     Permissions,
     TemplateContext,
-    UploadField,
     UploadSchema,
 )
 from core.templates import templates
@@ -25,6 +28,16 @@ from core.utils import alert_error, alert_success
 from routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+import io
+
+import pandas as pd
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from openpyxl.worksheet.datavalidation import DataValidation
+from sqlalchemy.orm import Session
+
+from core.database import get_db
+from core.models import Account, Card, Category
 
 
 @router.get("/transactions")
@@ -36,14 +49,14 @@ def get_transactions(
     per_page: int = Query(10),
     sort_by: str = Query("id"),
     sort_order: str = Query("asc"),
-    account_id: int | str = Query(None),
-    card_id: int | str = Query(None),
-    category_id: int | str = Query(None),
-    due_day_start: str = Query(None),
-    due_day_end: str = Query(None),
-    paid_at_start: str = Query(None),
-    paid_at_end: str = Query(None),
-    category_type: str = Query(None),
+    account_id: int | str = Query(None, alias="f_account_id"),
+    card_id: int | str = Query(None, alias="f_card_id"),
+    category_id: int | str = Query(None, alias="f_category_id"),
+    due_day_start: str = Query(None, alias="f_due_day_start"),
+    due_day_end: str = Query(None, alias="f_due_day_end"),
+    paid_at_start: str = Query(None, alias="f_paid_at_start"),
+    paid_at_end: str = Query(None, alias="f_paid_at_end"),
+    category_type: str = Query(None, alias="f_category_type"),
 ):
     # Base query com joins para poder ordenar por campos relacionados
     query = (
@@ -172,7 +185,7 @@ def get_transactions(
             type="combobox",
             required=False,
             edit=True,
-            options=[{"value": "", "label": "Nenhum"}] + card_options,
+            options=[{"value": "0", "label": "Nenhum"}] + card_options,
         ),
         CrudField(name="description", label="Descrição", type="text", required=False, edit=True),
         CrudField(name="value", label="Valor", type="number", required=True, edit=True, min=0),
@@ -216,27 +229,9 @@ def get_transactions(
 
     upload_schema = UploadSchema(
         label="Adicionar Transações",
-        description=(
-            "O CSV deve conter as colunas: category_id, description, value, due_day, paid_at"
-            " (opcional)."
-        ),
-        file_type="csv",
-        pre_fields=[
-            UploadField(
-                name="account_id",
-                label="Conta",
-                type="combobox",
-                required=True,
-                options=account_options,
-            ),
-            UploadField(
-                name="card_id",
-                label="Cartão",
-                type="combobox",
-                required=False,
-                options=[{"value": "", "label": "Nenhum"}] + card_options,
-            ),
-        ],
+        description="Você deve usar o Modelo de Planilha para preencher os dados corretamente. ",
+        file_type="xlsx",
+        pre_fields=None,
     )
 
     permissions = Permissions(add=True, edit=True, delete=True, upload=True, filter=True)
@@ -253,6 +248,145 @@ def get_transactions(
         total_count=total_count,
     )
     return templates.TemplateResponse("pages/transactions.html", context.model_dump())
+
+
+@router.get("/transactions/download-template")
+def download_transactions_template(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Gera e retorna um template de planilha Excel para upload de transações."""
+
+    # Consultar dados do banco
+    accounts = [a.name for a in db.query(Account).filter(Account.user_id == user.id).all()]
+    cards = [c.name for c in db.query(Card).filter(Card.user_id == user.id).all()]
+    parent_categories = (
+        db.query(Category).filter(Category.user_id == user.id, Category.parent_id.is_(None)).all()
+    )
+    categories = []
+    for parent in parent_categories:
+        categories.append(parent.name.strip())
+        for sub in parent.subcategories:
+            categories.append(parent.name.strip() + " > " + sub.name.strip())
+
+    # Encontrar o tamanho máximo das listas
+    max_len = max(len(accounts), len(cards), len(categories))
+    accounts += [None] * (max_len - len(accounts))
+    cards += [None] * (max_len - len(cards))
+    categories += [None] * (max_len - len(categories))
+
+    # Criar DataFrame da aba de Transações
+    df_transactions = pd.DataFrame(
+        columns=[
+            "CONTA",
+            "CARTAO",
+            "CATEGORIA",
+            "DESCRICAO",
+            "VALOR",
+            "DATA_VENCIMENTO",
+            "DATA_PAGAMENTO",
+            "É_RECORRENTE?",
+            "FREQUENCIA_RECORRENCIA",
+            "DATA_FINAL_RECORRENCIA",
+            "É_PARCELADO?",
+            "QUANTIDADE_PARCELAS",
+            "PARCELA_ATUAL",
+        ]
+    )
+
+    # Criar DataFrame da aba Auxiliar
+    df_auxiliar = pd.DataFrame({"CONTA": accounts, "CARTAO": cards, "CATEGORIA": categories})
+
+    # Criar um arquivo Excel na memória
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_transactions.to_excel(writer, sheet_name="Transações", index=False)
+        df_auxiliar.to_excel(writer, sheet_name="Auxiliar", index=False)
+
+        wb = writer.book
+        ws_transactions = wb["Transações"]
+
+        # Criar estilos para formatação correta
+        currency_style = NamedStyle(name="currency", number_format='"R$" #,##0.00')
+        integer_style = NamedStyle(name="integer", number_format="0")
+        date_style = NamedStyle(name="date", number_format="DD/MM/YYYY")
+
+        if "currency" not in wb.named_styles:
+            wb.add_named_style(currency_style)
+        if "integer" not in wb.named_styles:
+            wb.add_named_style(integer_style)
+        if "date" not in wb.named_styles:
+            wb.add_named_style(date_style)
+
+        # Definir intervalos das listas auxiliares
+        max_accounts = len(accounts) + 1
+        max_cards = len(cards) + 1
+        max_categories = len(categories) + 1
+
+        account_range = f"{quote_sheetname('Auxiliar')}!$A$2:$A${max_accounts}"
+        card_range = f"{quote_sheetname('Auxiliar')}!$B$2:$B${max_cards}"
+        category_range = f"{quote_sheetname('Auxiliar')}!$C$2:$C${max_categories}"
+
+        # Criar validações de dados
+        dv_sim_nao = DataValidation(type="list", formula1='"SIM,NAO"', allow_blank=True)
+        dv_frequencia = DataValidation(
+            type="list", formula1='"mensal,semanal,anual"', allow_blank=True
+        )
+        dv_currency = DataValidation(type="decimal", operator="greaterThan", formula1="0")
+        dv_integer = DataValidation(type="whole", operator="greaterThan", formula1="0")
+        dv_date = DataValidation(type="date")
+
+        dv_account = DataValidation(type="list", formula1=account_range, allow_blank=False)
+        dv_card = DataValidation(type="list", formula1=card_range, allow_blank=True)
+        dv_category = DataValidation(type="list", formula1=category_range, allow_blank=False)
+
+        # Adicionar validações ao worksheet
+        ws_transactions.add_data_validation(dv_account)
+        ws_transactions.add_data_validation(dv_card)
+        ws_transactions.add_data_validation(dv_category)
+        ws_transactions.add_data_validation(dv_sim_nao)
+        ws_transactions.add_data_validation(dv_frequencia)
+        ws_transactions.add_data_validation(dv_currency)
+        ws_transactions.add_data_validation(dv_integer)
+        ws_transactions.add_data_validation(dv_date)
+
+        # Aplicar validações e formatações às células
+        for row in range(2, 200):
+            ws_transactions[f"A{row}"].value = None  # CONTA
+            ws_transactions[f"B{row}"].value = None  # CARTAO
+            ws_transactions[f"C{row}"].value = None  # CATEGORIA
+            ws_transactions[f"H{row}"].value = "NAO"  # É_RECORRENTE? (default: NAO)
+            ws_transactions[f"K{row}"].value = "NAO"  # É_PARCELADO? (default: NAO)
+
+            dv_account.add(ws_transactions[f"A{row}"])
+            dv_card.add(ws_transactions[f"B{row}"])
+            dv_category.add(ws_transactions[f"C{row}"])
+            dv_currency.add(ws_transactions[f"E{row}"])  # VALOR
+            dv_date.add(ws_transactions[f"F{row}"])  # DATA_VENCIMENTO
+            dv_date.add(ws_transactions[f"G{row}"])  # DATA_PAGAMENTO
+            dv_sim_nao.add(ws_transactions[f"H{row}"])  # É_RECORRENTE?
+            dv_frequencia.add(ws_transactions[f"I{row}"])  # FREQUENCIA_RECORRENCIA
+            dv_date.add(ws_transactions[f"J{row}"])  # DATA_FINAL_RECORRENCIA
+            dv_sim_nao.add(ws_transactions[f"K{row}"])  # É_PARCELADO?
+            dv_integer.add(ws_transactions[f"L{row}"])  # QUANTIDADE_PARCELAS
+            dv_integer.add(ws_transactions[f"M{row}"])  # PARCELA_ATUAL
+
+            # Aplicar estilos nas células
+            ws_transactions[f"E{row}"].style = "currency"  # VALOR em BRL
+            ws_transactions[f"F{row}"].style = "date"  # DATA_VENCIMENTO
+            ws_transactions[f"G{row}"].style = "date"  # DATA_PAGAMENTO
+            ws_transactions[f"J{row}"].style = "date"  # DATA_FINAL_RECORRENCIA
+            ws_transactions[f"L{row}"].style = "integer"  # QUANTIDADE_PARCELAS
+            ws_transactions[f"M{row}"].style = "integer"  # PARCELA_ATUAL
+
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=template_transacoes.xlsx"},
+    )
 
 
 @router.get("/transactions/{transaction_id}")
@@ -392,39 +526,184 @@ def delete_transaction(
 @router.post("/transactions/upload")
 def upload_transactions(
     request: Request,
-    db: Session = Depends(get_db),
     user=Depends(get_current_user),
+    db: Session = Depends(get_db),
     file: UploadFile = File(...),
-    account_id: int = Form(...),
-    card_id: str = Form(None),
 ):
     """
-    Importa transações em massa via arquivo CSV.
-    O CSV deve conter, em cada linha, os campos: category_id, description, value, due_day, paid_at (opcional).
+    Importa transações em massa via arquivo XLSX (Usar o Modelo).
+    - Se for recorrente e não tiver data final, criar até o final do ano.
+    - Se for parcelado, adicionar a parcela na descrição e criar as transações das parcelas restantes.
     """
     try:
-        contents = file.file.read().decode("utf-8")
-        reader = csv.DictReader(StringIO(contents))
-        new_transactions = []
-        for row in reader:
-            new_trans = Transaction(
-                user_id=user.id,
-                account_id=account_id,
-                card_id=int(card_id) if card_id and card_id.strip() else None,
-                category_id=int(row["category_id"]),
-                description=row.get("description", ""),
-                value=abs(float(row["value"])),
-                due_day=date.fromisoformat(row["due_day"]),
-                paid_at=date.fromisoformat(row["paid_at"]) if row.get("paid_at") else None,
-                is_recurring=False,
+        # Ler arquivo Excel
+        contents = file.file.read()
+        df = pd.read_excel(io.BytesIO(contents), sheet_name="Transações")
+
+        # Buscar listas auxiliares
+        account_names = {
+            a.name: a for a in db.query(Account).filter(Account.user_id == user.id).all()
+        }
+        card_names = {c.name: c for c in db.query(Card).filter(Card.user_id == user.id).all()}
+        category_names = {
+            c.name: c.id for c in db.query(Category).filter(Category.user_id == user.id).all()
+        }
+
+        def add_months(source_date, months):
+            month = source_date.month - 1 + months
+            year = source_date.year + (month // 12)
+            month = (month % 12) + 1
+            day = source_date.day
+            try:
+                return source_date.replace(year=year, month=month, day=day)
+            except ValueError:
+                last_day = calendar.monthrange(year, month)[1]
+                return source_date.replace(year=year, month=month, day=last_day)
+
+        transactions = []
+        today = datetime.today()
+
+        for index, row in df.iterrows():
+            if pd.isna(row["CONTA"]) or pd.isna(row["CATEGORIA"]) or pd.isna(row["VALOR"]):
+                continue
+
+            account = account_names.get(row["CONTA"])
+            if not account:
+                alert_error(request, f"Linha[{index}] Conta inválida")
+                return
+
+            card = card_names.get(row["CARTAO"]) if pd.notna(row["CARTAO"]) else None
+            if card and card.account_id != account.id:
+                alert_error(request, f"Linha[{index}] Cartão inválido")
+                return
+
+            category_id = category_names.get(row["CATEGORIA"].split(" > ")[-1].strip())
+            if not category_id:
+                alert_error(request, f"Linha[{index}] Categoria inválida")
+                return
+
+            description = row["DESCRICAO"]
+            value = row["VALOR"]
+            due_day = row["DATA_VENCIMENTO"]
+            paid_at = row["DATA_PAGAMENTO"] if pd.notna(row["DATA_PAGAMENTO"]) else None
+            is_recurring = str(row["É_RECORRENTE?"]).strip().lower() == "sim"
+
+            # Tratar frequência de recorrência corretamente
+            recurring_frequency = row["FREQUENCIA_RECORRENCIA"] if is_recurring else None
+            if pd.isna(recurring_frequency) or recurring_frequency not in [
+                "mensal",
+                "semanal",
+                "anual",
+            ]:
+                recurring_frequency = None
+
+            end_recurring = row["DATA_FINAL_RECORRENCIA"] if is_recurring else None
+            is_installment = str(row["É_PARCELADO?"]).strip().lower() == "sim"
+            total_installments = (
+                int(row["QUANTIDADE_PARCELAS"])
+                if is_installment and pd.notna(row["QUANTIDADE_PARCELAS"])
+                else None
             )
-            new_transactions.append(new_trans)
-        db.add_all(new_transactions)
-        db.commit()
-        alert_success(request, f"{len(new_transactions)} transações importadas com sucesso!")
+            current_installment = (
+                int(row["PARCELA_ATUAL"])
+                if is_installment and pd.notna(row["PARCELA_ATUAL"])
+                else None
+            )
+
+            if is_installment and is_recurring:
+                alert_error(
+                    request, f"Linha[{index}] Transação não pode ser recorrente e parcelada"
+                )
+                return
+
+            transaction = Transaction(
+                user_id=user.id,
+                account_id=account.id,
+                card_id=card.id if card else None,
+                category_id=category_id,
+                description=(
+                    f"({current_installment}/{total_installments}) {description}"
+                    if is_installment
+                    else description
+                ),
+                value=value,
+                due_day=due_day,
+                paid_at=paid_at,
+                is_recurring=is_recurring,
+                recurring_frequency=recurring_frequency,
+                installments=total_installments,
+                current_installment=current_installment,
+            )
+            db.add(transaction)
+            db.commit()
+            db.refresh(transaction)
+            transactions.append(transaction)
+            # Criar transações recorrentes até o fim do ano
+            if is_recurring and recurring_frequency:
+                last_due = due_day
+                while not end_recurring or last_due.year == today.year:
+                    if recurring_frequency == "mensal":
+                        last_due = add_months(last_due, 1)
+                    elif recurring_frequency == "semanal":
+                        last_due += timedelta(days=7)
+                    elif recurring_frequency == "anual":
+                        last_due = add_months(last_due, 12)
+                    else:
+                        break  # Frequência não reconhecida
+
+                    if last_due.year > today.year:
+                        break
+
+                    # Verificar se ultrapassou a data final, se houver
+                    if end_recurring and last_due > end_recurring:
+                        break
+
+                    transaction = Transaction(
+                        user_id=user.id,
+                        account_id=account.id,
+                        card_id=card.id if card else None,
+                        category_id=category_id,
+                        description=description,
+                        value=value,
+                        due_day=last_due,
+                        is_recurring=True,
+                        recurring_frequency=recurring_frequency,
+                        parent_id=transactions[-1].id,
+                    )
+                    db.add(transaction)
+                    db.commit()
+                    db.refresh(transaction)
+                    transactions.append(transaction)
+
+            # Criar parcelas futuras
+            if is_installment and total_installments and current_installment:
+                for installment in range(current_installment + 1, total_installments + 1):
+                    months_to_add = installment - current_installment
+                    new_due_day = add_months(due_day, months_to_add)
+                    transaction = Transaction(
+                        user_id=user.id,
+                        account_id=account.id,
+                        card_id=card.id if card else None,
+                        category_id=category_id,
+                        description=f"({installment}/{total_installments}) {description}",
+                        value=value,
+                        due_day=new_due_day,
+                        is_recurring=False,
+                        installments=total_installments,
+                        current_installment=installment,
+                        parent_id=transactions[-1].id,
+                    )
+                    db.add(transaction)
+                    db.commit()
+                    db.refresh(transaction)
+                    transactions.append(transaction)
+
+        # Salvar transações no banco
+        alert_success(request, f"{len(transactions)} Transações importadas com sucesso!")
+
     except Exception as e:
         db.rollback()
-        alert_error(request, f"Erro ao importar transações: {str(e)}")
-    finally:
-        file.file.close()
-    return RedirectResponse(url="/transactions", status_code=303)
+        alert_error(request, f"Erro ao processar upload: {str(e)}")
+        print(f"Erro ao processar upload: {e}")
+
+    return

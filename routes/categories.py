@@ -33,8 +33,8 @@ def get_categories(
     per_page: int = Query(10),
     sort_by: str = Query("id"),
     sort_order: str = Query("asc"),
-    name: str = Query(None),
-    type_filter: str = Query(None),
+    name: str = Query(None, alias="f_name"),
+    type_filter: str = Query(None, alias="f_type_filter"),
 ):
     # Constrói a query base para categorias "pais"
     query = db.query(Category).filter(Category.user_id == user.id, Category.parent_id == None)

@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, List, Literal, Optional
 
 from fastapi import Request
@@ -100,6 +100,21 @@ class BudgetOut(BaseModel):
     month: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TransactionIndexOut(BaseModel):   
+    id: Optional[int] = None
+    category_name: str
+    category_type: str
+    category_icon: str
+    category_color: str
+    description: str
+    value: float
+    due_day: date
+    paid_at: Optional[datetime] = None
+    is_card_invoice: bool = False
+    close_day: Optional[date] = None
+    transactions: Optional[list] = None
 
 
 class Permissions(BaseModel):

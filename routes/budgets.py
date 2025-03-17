@@ -42,8 +42,8 @@ def get_budgets(
     per_page: int = Query(10),
     sort_by: str = Query("id"),
     sort_order: str = Query("asc"),
-    category_id: int = Query(None),
-    month: str = Query(None),
+    category_id: int = Query(None, alias="f_category_id"),
+    month: str = Query(None, alias="f_month"),
 ):
     # Constrói a query base (faz join com Category para permitir ordenação por nome da categoria)
     query = (

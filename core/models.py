@@ -127,11 +127,11 @@ class Transaction(Base):
     description = Column(String, nullable=True)
     value = Column(DECIMAL(15, 2), nullable=False)
     due_day = Column(Date, nullable=False)
-    paid_at = Column(Date, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
 
     is_recurring = Column(Boolean, default=False)
     recurring_frequency = Column(
-        Enum("mensal", "trimestral", "anual", name="frequency_type"), nullable=True
+        Enum("mensal", "semanal", "anual", name="frequency_type"), nullable=True
     )
     recurring_end_date = Column(Date, nullable=True)
     installments = Column(Integer, nullable=True)

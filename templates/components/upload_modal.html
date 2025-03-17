@@ -53,14 +53,22 @@
       const formData = new FormData(form);
       
       try {
-        // Para transações, a URL de upload deve ser /transactions/upload
         const response = await fetch(`/transactions/upload`, {
           method: "POST",
           body: formData,
         });
-        const result = await response.json();
-        alert(result.message);
-        closeUploadModal();
+
+        if (response.redirected) {
+          // Redireciona para a página de transações após o upload bem-sucedido
+          window.location.href = response.url;
+        } else if (response.ok) {
+          // Fecha o modal e recarrega a página se o servidor não redirecionar
+          closeUploadModal();
+          window.location.reload();
+        } else {
+          // Trata erro caso o servidor não retorne um redirecionamento ou sucesso
+          alert("Erro ao enviar o arquivo. Verifique o formato da planilha.");
+        }
       } catch (error) {
         alert("Erro ao enviar o arquivo.");
         console.error(error);

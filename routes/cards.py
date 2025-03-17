@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -32,9 +32,9 @@ def get_cards(
     per_page: int = 10,
     sort_by: str = "id",
     sort_order: str = "asc",
-    account_id: int = None,
-    name: str = None,
-    brand: str = None,
+    account_id: int = Query(None, alias="f_account_id"),
+    name: str = Query(None, alias="f_name"),
+    brand: str = Query(None, alias="f_brand"),
 ):
     # Constrói a query base
     query = db.query(Card).filter(Card.user_id == user.id)
@@ -272,7 +272,7 @@ def delete_card(
 
 
 @router.post("/cards/{card_id}/upload")
-async def upload_transactions_csv(
+async def upload_cards_csv(
     card_id: int,
     file: UploadFile = File(...),
     account_id: int = Form(...),

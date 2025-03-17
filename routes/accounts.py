@@ -33,8 +33,8 @@ def get_accounts(
     per_page: int = Query(10),
     sort_by: str = Query("id"),
     sort_order: str = Query("asc"),
-    name: Optional[str] = Query(None),
-    bank: Optional[str] = Query(None),
+    name: Optional[str] = Query(None, alias="f_name"),
+    bank: Optional[str] = Query(None, alias="f_bank"),
 ):
     # Constrói a query base
     query = db.query(Account).filter(Account.user_id == user.id)
@@ -213,7 +213,7 @@ def delete_account(
 
 
 @router.post("/accounts/{account_id}/upload")
-async def upload_transactions_csv(
+async def upload_accounts_csv(
     account_id: int,
     file: UploadFile = File(...),
     user=Depends(get_current_user),

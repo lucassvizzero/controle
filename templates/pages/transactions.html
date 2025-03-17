@@ -4,8 +4,12 @@
 {% block header %}Transações{% endblock %}
 
 {% block content %}
-    {% include "components/alerts.html" %}
-    {% include "components/datagrid.html" %}
-    {% include "components/crud_modal.html" %}
-    {% include "components/upload_modal.html" %}
+{% include "components/alerts.html" %}
+<button class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded ml-2"
+    onclick="window.location.href='/transactions/download-template'">
+    Baixar Modelo
+</button>
+{% include "components/datagrid.html" %}
+{% include "components/crud_modal.html" %}
+{% include "components/upload_modal.html" %}
 {% endblock %}
