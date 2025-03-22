@@ -113,7 +113,15 @@ def get_budgets(
             edit=True,
             options=category_options,
         ),
-        CrudField(name="limit_value", label="Limite", type="number", required=True, edit=True),
+        CrudField(
+            name="limit_value",
+            label="Limite",
+            type="number",
+            required=True,
+            edit=True,
+            min=0,
+            step="0.01",
+        ),
         CrudField(name="month", label="Mês (YYYY-MM)", type="month", required=True, edit=True),
     ]
 

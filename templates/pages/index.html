@@ -21,19 +21,19 @@
   <!-- Resumos -->
   <div class="grid grid-cols-4 gap-4 mb-6">
     <div class="bg-green-100 p-4 rounded shadow">
-      <p class="font-bold">Entrou</p>
+      <p class="text-gray-500">Entrou (R$ {{ entrou_preview|float|round(2) }})</p>
       <p class="text-2xl text-green-600">R$ {{ entrou|float|round(2) }}</p>
     </div>
     <div class="bg-red-100 p-4 rounded shadow">
-      <p class="font-bold">Saiu</p>
+      <p class="text-gray-500">Saiu (R$ {{ saiu_preview|float|round(2) }})</p>
       <p class="text-2xl text-red-600">R$ {{ saiu|float|round(2) }}</p>
     </div>
     <div class="bg-blue-100 p-4 rounded shadow">
-      <p class="font-bold">Sobrou</p>
+      <p class="text-gray-500">Sobrou (R$ {{ sobrou_preview|float|round(2) }})</p>
       <p class="text-2xl text-blue-600">R$ {{ sobrou|float|round(2) }}</p>
     </div>
     <div class="bg-yellow-100 p-4 rounded shadow">
-      <p class="font-bold">Orçamento</p>
+      <p class="text-gray-500">Orçamento</p>
       <p class="text-2xl text-yellow-600">{{ orcamento_percent }}%</p>
     </div>
   </div>
@@ -52,9 +52,11 @@
            </div>
            <button class="text-blue-500 text-sm underline" onclick="openBudgetDetail({{ parent.root_id }})">Detalhes</button>
          </div>
-         <p class="text-sm text-gray-500 mt-1">Limite: R$ {{ parent.total_limit|float|round(2) }}</p>
-         <p class="text-sm text-gray-500">Gasto: R$ {{ parent.total_spent|float|round(2) }}</p>
-         
+         {% if parent.total_limit|float > 0 %}
+            <p class="text-sm text-gray-500 mt-1">R$ {{ parent.total_spent|float|round(2) }} / R$ {{ parent.total_limit|float|round(2) }}</p>
+          {% else %}
+            <p class="text-sm text-gray-500 mt-1">R$ {{ parent.total_cat|float|round(2) }} / -</p>
+          {% endif %}
          <!-- Barra de progresso -->
          <div class="w-full bg-gray-200 rounded h-4 mt-2 relative">
            {% set bar_width = parent.progress if parent.progress < 100 else 100 %}
@@ -107,7 +109,15 @@
               {% set row_class = "bg-green-100" %}
             {% endif %}
             <tr class="{{ row_class }}">
-              <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
+              {% if t.is_card_invoice %}
+                  <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}} <button onclick='openInvoiceDetail({{ t.transactions | tojson }})'
+                    class="px-3 py-1 rounded text-sm opacity-100 hover:opacity-100 transition">
+                    <i class="fa-solid fa-eye"></i>
+                </button></td>
+              {% else %}
+                  <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
+              {% endif %}
+              
               <td class="p-2 border">{{ t.description }}</td>
               <td class="p-2 border">{{ t.paid_at|strftime('%d/%m/%Y') }}</td>
               <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
@@ -146,9 +156,9 @@
         </thead>
         <tbody>
           {% for t in transacoes_pendentes %}
-            {% if t.due_day == current_date %}
+            {% if t.due_at == current_date %}
               {% set row_class = "bg-orange-100" %}
-            {% elif t.due_day < current_date %}
+            {% elif t.due_at < current_date %}
               {% set row_class = "bg-orange-300" %}
             {% else %}
               {% set row_class = "" %}
@@ -156,32 +166,28 @@
             <tr class="{{ row_class }}">
                 <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
               <td class="p-2 border">{{ t.description }}</td>
-              <td class="p-2 border">{{ t.due_day|strftime('%d/%m/%Y') }}</td>
+              <td class="p-2 border">{{ t.due_at|strftime('%d/%m/%Y') }}</td>
               <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
               <td class="p-2 border text-center">
                 <div class="flex flex-col items-center space-y-1">
                     {% if t.is_card_invoice %}
-                        <form action="/cards/pay_invoice" method="post">
-                            <input type="hidden" name="transaction_ids" value="{{ t.transactions | map(attribute='id') | join(',') }}">
-                            {% if t.close_day < current_date %}
-                              <button type="submit"
-                                  class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
-                                  💳 Pagar
-                              </button>
-                            {% endif %}
-                        </form>
+                          {% if t.close_at <= current_date %}
+                            <button onclick="openPaymentModal('{{ t.transactions | map(attribute='id') | join(',') }}', '{{ t.description }}', '{{ t.value }}')"
+                                class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                                💳 Pagar
+                            </button>
+                          {% endif %}
+    
                         <button onclick='openInvoiceDetail({{ t.transactions | tojson }})'
-                            class="bg-gray-500 text-white px-3 py-1 rounded text-sm opacity-80 hover:opacity-100 transition">
-                            🔍 Ver
+                        class="px-3 py-1 rounded text-sm opacity-100 hover:opacity-100 transition">
+                        <i class="fa-solid fa-eye"></i>
                         </button>
                         
                     {% else %}
-                        <form action="/transactions/{{ t.id }}/mark_paid" method="post">
-                            <button type="submit"
-                                class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
-                                💰 Pagar
-                            </button>
-                        </form>
+                        <button onclick="openPaymentModal('{{ t.id }}','{{ t.description }}','{{ t.value }}')"
+                            class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                            💰 Pagar
+                        </button>
                     {% endif %}
                 </div>
             </td>
@@ -204,6 +210,54 @@
         {% endif %}
       </div>
     </div>
+  </div>
+  
+
+  <!-- Modal para pagamento de transações -->
+  <div id="payment-modal"
+      class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
+      style="z-index: 9999;"
+      onclick="closePaymentModal(event)">
+      <div id="payment-modal-content"
+          class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative overflow-y-auto max-h-[80vh]"
+          onclick="event.stopPropagation()">
+          <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg"
+                  onclick="closePaymentModal()">✖
+          </button>
+          <h2 class="text-xl font-bold mb-4 text-center">Confirmar Pagamento</h2>
+          <form id="payment-form" class="space-y-3">
+              <input type="hidden" id="transaction-id">
+
+              <div>
+                  <label for="payment-description" class="block text-gray-700 font-semibold">Descrição:</label>
+                  <input type="text" id="payment-description"
+                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
+              </div>
+
+              <div>
+                  <label for="payment-date" class="block text-gray-700 font-semibold">Data de Pagamento:</label>
+                  <input type="datetime-local" id="payment-date"
+                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
+              </div>
+
+              <div>
+                  <label for="payment-value" class="block text-gray-700 font-semibold">Valor:</label>
+                  <input type="number" id="payment-value" step="0.01"
+                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
+              </div>
+
+              <div class="flex justify-end space-x-2 mt-4">
+                  <button type="button" onclick="closePaymentModal()"
+                          class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">
+                      Cancelar
+                  </button>
+                  <button type="submit"
+                          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">
+                      Confirmar 💰
+                  </button>
+              </div>
+          </form>
+      </div>
   </div>
   
   <div id="invoice-detail-modal"
@@ -230,6 +284,42 @@
       </div>
   </div>
   <script>
+        function openPaymentModal(transactionId, description, value) {
+        document.getElementById("transaction-id").value = transactionId;
+        document.getElementById("payment-description").value = description;
+        document.getElementById("payment-date").value = new Date().toISOString().split("T")[0];
+        document.getElementById("payment-value").value = value;
+        document.getElementById("payment-modal").classList.remove("hidden");
+    }
+
+    function closePaymentModal() {
+        document.getElementById("payment-modal").classList.add("hidden");
+    }
+
+    document.getElementById("payment-form").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const transactionId = document.getElementById("transaction-id").value;
+        const description = document.getElementById("payment-description").value;
+        const paymentDate = document.getElementById("payment-date").value;
+        const value = parseFloat(document.getElementById("payment-value").value);
+
+        const response = await fetch(`/registry_payment`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({description, payment_date: paymentDate, value, transaction_id: transactionId})
+        });
+
+        if (response.redirected) {
+          // Redireciona para a página de transações após o upload bem-sucedido
+          window.location.href = response.url;
+        } else if (response.ok) {
+          // Fecha o modal e recarrega a página se o servidor não redirecionar
+          closeUploadModal();
+          window.location.reload();
+        } else {
+            alert("Erro ao processar pagamento.");
+        }
+    });
 
 function openInvoiceDetail(transactions) {
         if (!transactions || transactions.length === 0) {
@@ -246,8 +336,8 @@ function openInvoiceDetail(transactions) {
             contentBody.innerHTML += `
                 <tr>
                     <td class="p-2 border">${t.description}</td>
-                    <td class="p-2 border">${new Date(t.due_day).toLocaleDateString('pt-BR')}</td>
-                    <td class="p-2 border text-right">R$ ${t.value.toFixed(2)}</td>
+                    <td class="p-2 border">${new Date(t.due_at).toLocaleDateString('pt-BR')}</td>
+                    <td class="p-2 border text-right ${t.category_type == 'income' ? 'bg-green-50' : ''}">${t.category_type == 'expense' ? 'R$' : '- R$'} ${t.value.toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -289,8 +379,7 @@ function openInvoiceDetail(transactions) {
               <i class="${item.cat_icon || 'fas fa-folder'} text-xl" style="color:${item.cat_color || '#999'}"></i>
               <span class="font-bold">${item.cat_name}</span>
             </div>
-            <p>Limite: R$ ${itemLimit}</p>
-            <p>Gasto: R$ ${itemSpent}</p>
+            <p>R$ ${itemSpent} / R$ ${itemLimit > 0 ? itemLimit : "-"}</p>
             <div class="w-full bg-gray-200 rounded h-3 mt-1">
               <div class="h-3 rounded" style="width:${Math.min(itemProgress,100)}%; background-color:${barColor};"></div>
             </div>

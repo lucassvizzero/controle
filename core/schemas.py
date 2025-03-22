@@ -46,7 +46,6 @@ class CardOut(BaseModel):
     brand: Optional[BrandName] = None
     due_day: int
     close_day: int
-    credit_limit: Optional[float] = None
     is_active: bool
     updated_at: datetime
 
@@ -58,7 +57,6 @@ class AccountOut(BaseModel):
     id: int
     name: str
     bank: BankName
-    balance: float = 0.00
     is_active: bool
     updated_at: datetime
 
@@ -70,6 +68,7 @@ class CategoryType(str, enum.Enum):
     income = "income"
     expense = "expense"
     transfer = "transfer"
+    invoice = "invoice"
 
 
 class CategoryOut(BaseModel):
@@ -102,7 +101,7 @@ class BudgetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TransactionIndexOut(BaseModel):   
+class TransactionIndexOut(BaseModel):
     id: Optional[int] = None
     category_name: str
     category_type: str
@@ -110,10 +109,10 @@ class TransactionIndexOut(BaseModel):
     category_color: str
     description: str
     value: float
-    due_day: date
+    due_at: date
     paid_at: Optional[datetime] = None
     is_card_invoice: bool = False
-    close_day: Optional[date] = None
+    close_at: Optional[date] = None
     transactions: Optional[list] = None
 
 
@@ -134,6 +133,7 @@ class BaseField(BaseModel):
         "checkbox",
         "color",
         "date",
+        "datetime-local",
         "email",
         "file",
         "image",
@@ -145,7 +145,6 @@ class BaseField(BaseModel):
         "time",
         "week",
         # custom types
-        "datetime",
         "switch",
         "combobox",
         "action",
@@ -170,6 +169,9 @@ class CrudField(BaseField):
     required: Optional[bool] = False
     edit: Optional[bool] = False
     options: Optional[List[ComboboxOption]] = None
+    min: Optional[int] = None
+    max: Optional[int] = None
+    step: Optional[str] = None
 
 
 class FilterField(BaseField):

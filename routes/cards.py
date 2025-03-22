@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -14,8 +14,6 @@ from core.schemas import (
     FilterField,
     Permissions,
     TemplateContext,
-    UploadField,
-    UploadSchema,
 )
 from core.templates import templates
 from routes.auth import get_current_user
@@ -49,7 +47,6 @@ def get_cards(
         "id": Card.id,
         "name": Card.name,
         "brand": Card.brand,
-        "credit_limit": Card.credit_limit,
         "due_day": Card.due_day,
         "close_day": Card.close_day,
         "updated_at": Card.updated_at,
@@ -68,10 +65,9 @@ def get_cards(
         Column(label="ID", type="number", sort=True, sort_key="id"),
         Column(label="Nome", type="text", sort=True, sort_key="name"),
         Column(label="Bandeira", type="text", sort=True, sort_key="brand"),
-        Column(label="Limite", type="currency", sort=True, sort_key="credit_limit"),
         Column(label="Vencimento", type="number", sort=True, sort_key="due_day"),
         Column(label="Fechamento", type="number", sort=True, sort_key="close_day"),
-        Column(label="Última Atualização", type="datetime", sort=True, sort_key="updated_at"),
+        Column(label="Última Atualização", type="datetime-local", sort=True, sort_key="updated_at"),
     ]
 
     # Monta os valores (linhas) – cada célula na ordem das colunas
@@ -82,7 +78,6 @@ def get_cards(
                 card.id,
                 card.name,
                 str(card.brand.value).title() if card.brand else "N/A",
-                card.credit_limit,
                 card.due_day,
                 card.close_day,
                 card.updated_at,
@@ -116,13 +111,6 @@ def get_cards(
             ],
         ),
         CrudField(
-            name="credit_limit",
-            label="Limite de Crédito",
-            type="currency",
-            required=True,
-            edit=True,
-        ),
-        CrudField(
             name="due_day", label="Dia de Vencimento", type="number", required=True, edit=True
         ),
         CrudField(
@@ -154,37 +142,15 @@ def get_cards(
         ),
     ]
 
-    # Schema para o upload – para importação em massa de cartões via CSV
-    upload_schema = UploadSchema(
-        label="Adicionar Cartões",
-        description=(
-            "O CSV deve conter as colunas: 'Nome', 'Bandeira', 'Limite', 'Vencimento' e"
-            " 'Fechamento'."
-        ),
-        file_type="csv",
-        pre_fields=[
-            UploadField(
-                name="account_id",
-                type="combobox",
-                label="Conta",
-                required=True,
-                options=[
-                    ComboboxOption(value=acc.id, label=acc.name).model_dump() for acc in accounts
-                ],
-            )
-        ],
-    )
-
     # Monta o contexto usando o TemplateContext (que já preenche dados do request)
     context = TemplateContext(
         request=request,
         entity="cards",
-        permissions=Permissions(add=True, edit=True, delete=True, upload=True, filter=True),
+        permissions=Permissions(add=True, edit=True, delete=True, filter=True),
         columns=columns,
         values=values,
         crud_schema=crud_schema,
         filter_schema=filter_schema,
-        upload_schema=upload_schema,
         total_count=total_count,
     )
 
@@ -209,7 +175,6 @@ def create_card(
     account_id: int = Form(...),
     name: str = Form(...),
     brand: str = Form(...),
-    credit_limit: float = Form(None),
     due_day: int = Form(...),
     close_day: int = Form(...),
 ):
@@ -217,7 +182,6 @@ def create_card(
     new_card = Card(
         name=name,
         brand=brand,
-        credit_limit=credit_limit,
         due_day=due_day,
         close_day=close_day,
         user_id=user.id,
@@ -237,7 +201,6 @@ def edit_card(
     account_id: int = Form(...),
     name: str = Form(...),
     brand: str = Form(...),
-    credit_limit: float = Form(None),
     due_day: int = Form(...),
     close_day: int = Form(...),
 ):
@@ -249,7 +212,6 @@ def edit_card(
     card.account_id = account_id
     card.name = name
     card.brand = brand
-    card.credit_limit = credit_limit
     card.due_day = due_day
     card.close_day = close_day
     db.commit()
@@ -269,22 +231,3 @@ def delete_card(
         db.delete(card)
         db.commit()
     return RedirectResponse(url="/cards", status_code=303)
-
-
-@router.post("/cards/{card_id}/upload")
-async def upload_cards_csv(
-    card_id: int,
-    file: UploadFile = File(...),
-    account_id: int = Form(...),
-    user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Recebe um arquivo CSV e adiciona transações a uma conta específica."""
-    card = db.query(Card).filter(Card.id == card_id, Card.user_id == user.id).first()
-    if not card:
-        return {"error": "Cartão não encontrado"}
-
-    contents = await file.read()
-    csv_data = contents.decode("utf-8").splitlines()
-
-    return {"message": f"Transações importadas para o cartão {card.name}!"}

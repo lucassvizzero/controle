@@ -1,6 +1,6 @@
 <!-- templates/components/crud_modal.html -->
 <div id="crud-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded shadow-lg w-96">
+    <div class="bg-white p-6 rounded shadow-lg w-96 max-h-[80vh] overflow-y-auto">
         <h2 id="modal-title" class="text-xl font-bold mb-4">Adicionar Item</h2>
         <form id="crud-form" method="POST">
             <input type="hidden" name="item_id" id="item-id">
@@ -35,7 +35,7 @@
                             </div>
                         </div>
                     {% else %}
-                        <input type="{{ field.type }}" name="{{ field.name }}" id="{{ field.name }}"
+                        <input type="{{ field.type }}" name="{{ field.name }}" id="{{ field.name }}" step="{{ field.step }}" min="{{ field.min }}" max="{{ field.max }}"
                                class="w-full p-2 border rounded"
                                {% if field.required %}required{% endif %}>
                     {% endif %}
@@ -67,6 +67,10 @@
 }
 .absolute.move {
     transform: translateX(100%);
+}
+#crud-modal > div {
+    max-height: 80vh; /* 80% da altura da tela */
+    overflow-y: auto; /* Ativa a rolagem vertical se necessário */
 }
 </style>
 
@@ -395,11 +399,12 @@ async function loadEntity(id) {
 
     {% for field in crud_schema %}
         if (data["{{ field.name }}"] !== undefined) {
-            console.log(`Preenchendo campo: {{ field.name }} com valor:`, data["{{ field.name }}"]);  // ✅ Debug
+            console.log(`Preenchendo campo: {{ field.name }} com valor:`, data["{{ field.name }}"]); 
 
-            if ("{{ field.type }}" === "boolean") {
+            if ("{{ field.type }}" === "switch") {
                 const checkbox = document.getElementById("{{ field.name }}");
                 checkbox.checked = data["{{ field.name }}"];
+                checkbox.value = data["{{ field.name }}"];
                 toggleSwitchUI("{{ field.name }}", data["{{ field.name }}"]);
             
             } else if ("{{ field.type }}" === "combobox") {
@@ -432,6 +437,7 @@ document.getElementById("color").addEventListener("input", function () {
 function toggleSwitch(name) {
     const checkbox = document.getElementById(name);
     checkbox.checked = !checkbox.checked;
+    checkbox.value = checkbox.checked;
     toggleSwitchUI(name, checkbox.checked);
 }
 
@@ -453,4 +459,26 @@ function toggleSwitchUI(name, isChecked) {
 document.getElementById("cancel-btn").addEventListener("click", () => {
     document.getElementById("crud-modal").classList.add("hidden");
 });
+
+document.getElementById("crud-form").addEventListener("submit", function(event) {
+    const form = event.target;
+    const inputs = form.querySelectorAll("input, select, textarea");
+
+    inputs.forEach(input => {
+        if (input.type === "checkbox" || input.type === "switch") {
+            if (!input.checked) {
+                // Se não estiver marcado, adiciona um campo hidden no FormData
+                const hiddenInput = document.createElement("input");
+                hiddenInput.type = "hidden";
+                hiddenInput.name = input.name;
+                hiddenInput.value = "false";
+                form.appendChild(hiddenInput);
+            } else {
+                input.value = "true"; // Garante que o valor será enviado corretamente
+            }
+        }
+    });
+});
+
+
 </script>

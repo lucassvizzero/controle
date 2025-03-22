@@ -34,7 +34,6 @@ class Account(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100))
     bank = Column(Enum(BankName, name="bank_name"))
-    balance = Column(DECIMAL(15, 2), default=0.00)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
@@ -58,7 +57,6 @@ class Card(Base):
     brand = Column(Enum(BrandName, name="brand_name"))
     due_day = Column(Integer, nullable=False)
     close_day = Column(Integer, nullable=False)
-    credit_limit = Column(DECIMAL(15, 2), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
@@ -80,6 +78,7 @@ class Category(Base):
     icon = Column(String(50), nullable=True)
     color = Column(String(7), nullable=True)
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    system_category = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
@@ -126,7 +125,7 @@ class Transaction(Base):
 
     description = Column(String, nullable=True)
     value = Column(DECIMAL(15, 2), nullable=False)
-    due_day = Column(Date, nullable=False)
+    due_at = Column(Date, nullable=False)
     paid_at = Column(DateTime, nullable=True)
 
     is_recurring = Column(Boolean, default=False)

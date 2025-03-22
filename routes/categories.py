@@ -337,12 +337,16 @@ def edit_category(
     parent_id: str = Form(None),
 ):
     """Edita uma categoria do usuário autenticado."""
+
     parent_id = int(parent_id) if parent_id else None
     category = (
         db.query(Category).filter(Category.id == category_id, Category.user_id == user.id).first()
     )
     if not category:
         alert_error(request, "Categoria não encontrada")
+        return RedirectResponse(url="/categories", status_code=303)
+    if category.system_category:
+        alert_error(request, "Não é possível editar categorias do sistema")
         return RedirectResponse(url="/categories", status_code=303)
 
     if parent_id and parent_id == category.id:
@@ -373,6 +377,9 @@ def delete_category(
     category = (
         db.query(Category).filter(Category.id == category_id, Category.user_id == user.id).first()
     )
+    if category.system_category:
+        alert_error(request, "Não é possível deletar categorias do sistema")
+        return RedirectResponse(url="/categories", status_code=303)
     try:
         db.delete(category)
         db.commit()

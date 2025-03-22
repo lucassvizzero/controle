@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -16,7 +16,6 @@ from core.schemas import (
     FilterField,
     Permissions,
     TemplateContext,
-    UploadSchema,
 )
 from core.templates import templates
 from routes.auth import get_current_user
@@ -48,7 +47,6 @@ def get_accounts(
         "id": Account.id,
         "name": Account.name,
         "bank": Account.bank,
-        "balance": Account.balance,
         "updated_at": Account.updated_at,
     }
     sort_column = sort_map.get(sort_by, Account.id)
@@ -65,8 +63,7 @@ def get_accounts(
         Column(label="ID", type="number", sort=True, sort_key="id"),
         Column(label="Nome", type="text", sort=True, sort_key="name"),
         Column(label="Banco", type="text", sort=True, sort_key="bank"),
-        Column(label="Saldo", type="currency", sort=True, sort_key="balance"),
-        Column(label="Última Atualização", type="datetime", sort=True, sort_key="updated_at"),
+        Column(label="Última Atualização", type="datetime-local", sort=True, sort_key="updated_at"),
     ]
 
     # Monta os valores (linhas) – cada célula na ordem das colunas
@@ -77,7 +74,6 @@ def get_accounts(
                 acc.id,
                 acc.name,
                 acc.bank.value,
-                acc.balance,
                 acc.updated_at,
             ]
         )
@@ -97,7 +93,6 @@ def get_accounts(
                 ComboboxOption(value=BankName.nubank.value, label="Nubank").model_dump(),
             ],
         ),
-        CrudField(name="balance", label="Saldo", type="number", required=True, edit=True),
         CrudField(name="is_active", label="Ativo?", type="switch", required=False, edit=True),
     ]
 
@@ -116,14 +111,7 @@ def get_accounts(
         ),
     ]
 
-    # Schema para o upload de arquivo CSV (para criação em massa de contas, se desejado)
-    upload_schema = UploadSchema(
-        label="Adicionar Contas",
-        description="O CSV deve conter as colunas: 'Nome', 'Banco' e 'Saldo'.",
-        file_type="csv",
-    )
-
-    permissions = Permissions(add=True, edit=True, delete=True, upload=True, filter=True)
+    permissions = Permissions(add=True, edit=True, delete=True, filter=True)
 
     # Monta o contexto usando TemplateContext (que já preenche dados automáticos do request)
     context = TemplateContext(
@@ -134,7 +122,6 @@ def get_accounts(
         values=values,
         crud_schema=crud_schema,
         filter_schema=filter_schema,
-        upload_schema=upload_schema,
         total_count=total_count,
         page=page,
         per_page=per_page,
@@ -161,13 +148,10 @@ def create_account(
     user=Depends(get_current_user),
     name: str = Form(...),
     bank: str = Form(...),
-    balance: float = Form(0.00),
     is_active: bool = Form(...),
 ):
     """Cria uma nova conta bancária para o usuário autenticado."""
-    new_account = Account(
-        name=name, bank=bank, balance=balance, user_id=user.id, is_active=is_active
-    )
+    new_account = Account(name=name, bank=bank, user_id=user.id, is_active=is_active)
     db.add(new_account)
     db.commit()
     return RedirectResponse(url="/accounts", status_code=303)
@@ -181,7 +165,6 @@ def edit_account(
     user=Depends(get_current_user),
     name: str = Form(...),
     bank: str = Form(...),
-    balance: float = Form(0.00),
     is_active: bool = Form(...),
 ):
     """Edita uma conta bancária do usuário autenticado."""
@@ -191,7 +174,6 @@ def edit_account(
 
     account.name = name
     account.bank = bank
-    account.balance = balance
     account.is_active = is_active
     db.commit()
     return RedirectResponse(url="/accounts", status_code=303)
@@ -210,21 +192,3 @@ def delete_account(
         db.delete(account)
         db.commit()
     return RedirectResponse(url="/accounts", status_code=303)
-
-
-@router.post("/accounts/{account_id}/upload")
-async def upload_accounts_csv(
-    account_id: int,
-    file: UploadFile = File(...),
-    user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Recebe um arquivo CSV e adiciona transações a uma conta específica."""
-    account = db.query(Account).filter(Account.id == account_id, Account.user_id == user.id).first()
-    if not account:
-        return {"error": "Conta não encontrada"}
-
-    contents = await file.read()
-    csv_data = contents.decode("utf-8").splitlines()
-
-    return {"message": f"Transações importadas para a conta {account.name}!"}

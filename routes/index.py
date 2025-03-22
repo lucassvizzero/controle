@@ -3,9 +3,9 @@ import json
 from collections import defaultdict
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import and_, desc, func, or_
+from sqlalchemy import and_, asc, desc, func, or_
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -119,7 +119,7 @@ def convert_index_transactions(transactions):
                     category_color=t.category.color,
                     description=t.description,
                     value=t.value,
-                    due_day=t.due_day,
+                    due_at=t.due_at,
                     paid_at=t.paid_at,
                     is_card_invoice=False,
                     transactions=None,
@@ -135,7 +135,7 @@ def convert_index_transactions(transactions):
                     category_color=t.category.color,
                     description=t.description,
                     value=t.value,
-                    due_day=t.due_day,
+                    due_at=t.due_at,
                     paid_at=t.paid_at,
                     is_card_invoice=False,
                     transactions=None,
@@ -144,28 +144,28 @@ def convert_index_transactions(transactions):
     card_invoices = []
 
     for card in cards.values():
-        card["transactions"] = sorted(card["transactions"], key=lambda t: t.due_day)
+        card["transactions"] = sorted(card["transactions"], key=lambda t: t.due_at)
         tmp_card_invoices = {}
         for card_transaction in card["transactions"]:
-            month_card = card_transaction.due_day.month
-            year_card = card_transaction.due_day.year
-            if card_transaction.due_day.day > card["card_close_day"]:
+            month_card = card_transaction.due_at.month
+            year_card = card_transaction.due_at.year
+            if card_transaction.due_at.day >= card["card_close_day"]:
                 year_card, month_card = shift_month(
-                    card_transaction.due_day.year, card_transaction.due_day.month, 1
+                    card_transaction.due_at.year, card_transaction.due_at.month, 1
                 )
 
             _, last_day = calendar.monthrange(year_card, month_card)
-            due_day = date(
+            due_at = date(
                 year_card,
                 month_card,
                 card["card_due_day"] if card["card_due_day"] <= last_day else last_day,
             )
-            close_day = date(
+            close_at = date(
                 year_card,
                 month_card,
                 card["card_close_day"] if card["card_close_day"] <= last_day else last_day,
             )
-            month_card_name = due_day.strftime("%B/%Y").title()
+            month_card_name = due_at.strftime("%B/%Y").title()
             month_card_name = month_card_name.replace(
                 month_card_name.split("/")[0], month_translation[month_card_name.split("/")[0]]
             )
@@ -179,14 +179,17 @@ def convert_index_transactions(transactions):
                         category_color="#FF5722",
                         description=f"Fatura {card['card_name']} - {month_card_name}",
                         value=card_transaction.value,
-                        due_day=due_day,
-                        close_day=close_day,
+                        due_at=due_at,
+                        close_at=close_at,
                         paid_at=card_transaction.paid_at,
                         is_card_invoice=True,
                         transactions=[json.loads(card_transaction.model_dump_json())],
                     )
                 else:
-                    tmp_card_invoices[month_card_name + "-paid"].value += card_transaction.value
+                    if card_transaction.category_type == CategoryType.expense:
+                        tmp_card_invoices[month_card_name + "-paid"].value += card_transaction.value
+                    else:
+                        tmp_card_invoices[month_card_name + "-paid"].value -= card_transaction.value
                     tmp_card_invoices[month_card_name + "-paid"].transactions.append(
                         json.loads(card_transaction.model_dump_json())
                     )
@@ -199,14 +202,17 @@ def convert_index_transactions(transactions):
                         category_color="#FF5722",
                         description=f"Fatura {card['card_name']} - {month_card_name}",
                         value=card_transaction.value,
-                        due_day=due_day,
-                        close_day=close_day,
+                        due_at=due_at,
+                        close_at=close_at,
                         paid_at=None,
                         is_card_invoice=True,
                         transactions=[json.loads(card_transaction.model_dump_json())],
                     )
                 else:
-                    tmp_card_invoices[month_card_name].value += card_transaction.value
+                    if card_transaction.category_type == CategoryType.expense:
+                        tmp_card_invoices[month_card_name].value += card_transaction.value
+                    else:
+                        tmp_card_invoices[month_card_name].value -= card_transaction.value
                     tmp_card_invoices[month_card_name].transactions.append(
                         json.loads(card_transaction.model_dump_json())
                     )
@@ -251,16 +257,19 @@ def get_index(
     year: int = Query(None),
     month: int = Query(None),
     paid_page: int = Query(1),
-    paid_per_page: int = Query(10),
+    paid_per_page: int = Query(15),
     pending_page: int = Query(1),
-    pending_per_page: int = Query(10),
+    pending_per_page: int = Query(15),
 ):
     # Determina o "mês nominal" se não forem passados year e month
     if not year or not month:
         today = date.today()
         year, month = today.year, today.month
-        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH and today.day >= FIRST_DAY_OF_MONTH:
-            year, month = shift_month(year, month, -1)
+        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
+            if today.day >= FIRST_DAY_OF_MONTH:
+                year, month = shift_month(year, month, 1)
+            else:
+                year, month = shift_month(year, month, -1)
 
     start_date, end_date = get_period_range(year, month)
 
@@ -275,8 +284,10 @@ def get_index(
     # Transações Efetuadas (pagas) com paginação
     paid_query = (
         db.query(Transaction)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(Transaction.user_id == user.id)
         .filter(Transaction.paid_at.isnot(None))
+        .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
         .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
         .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
     )
@@ -289,8 +300,8 @@ def get_index(
     query_or = [
         and_(
             Transaction.card_id.is_(None),
-            Transaction.due_day >= start_date,
-            Transaction.due_day <= end_date,
+            Transaction.due_at >= start_date,
+            Transaction.due_at <= end_date,
         )
     ]
     for card in cards:
@@ -319,32 +330,63 @@ def get_index(
         query_or.append(
             and_(
                 Transaction.card_id == card.id,
-                Transaction.due_day >= invoice_start_date,
-                Transaction.due_day <= invoice_end_date,
+                Transaction.due_at >= invoice_start_date,
+                Transaction.due_at <= invoice_end_date,
             )
         )
     # Transações Pendentes com paginação
     pending_query = (
         db.query(Transaction)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(Transaction.user_id == user.id)
         .filter(Transaction.paid_at.is_(None))
+        .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
         .filter(or_(*query_or))
-        .order_by(desc(Transaction.due_day))
+        .order_by(asc(Transaction.due_at))
     )
 
     transacoes_pendente_all = pending_query.all()
     transacoes_pendentes = convert_index_transactions(transacoes_pendente_all)
     total_pending = len(transacoes_pendentes)
-    transacoes_pendentes = make_pagination(transacoes_pendentes, paid_page, paid_per_page)
+    transacoes_pendentes = make_pagination(transacoes_pendentes, pending_page, pending_per_page)
 
     # Resumos
-    entrou = sum(t.value for t in transacoes_efetuada_all if t.category.type == CategoryType.income)
+    entrou = sum(
+        t.value
+        for t in transacoes_efetuada_all
+        if t.category.type == CategoryType.income and t.card_id is None
+    )
     saiu = sum(t.value for t in transacoes_efetuada_all if t.category.type == CategoryType.expense)
+    credito_cartao = sum(
+        t.value
+        for t in transacoes_efetuada_all
+        if t.category.type == CategoryType.income and t.card_id is not None
+    )
+    saiu = saiu - credito_cartao
     sobrou = entrou - saiu
+
+    entrou_preview = (
+        sum(
+            t.value
+            for t in transacoes_pendente_all
+            if t.category.type == CategoryType.income and t.card_id is None
+        )
+        + entrou
+    )
+    saiu_preview = (
+        sum(t.value for t in transacoes_pendente_all if t.category.type == CategoryType.expense)
+        + saiu
+    )
+    sobrou_preview = entrou_preview - saiu_preview
 
     # Orçamentos do "mês nominal"
     month_date = date(year, month, 1)
     budgets = db.query(Budget).filter(Budget.user_id == user.id, Budget.month == month_date).all()
+    categories = (
+        db.query(Category)
+        .filter(Category.user_id == user.id, Category.type == CategoryType.expense)
+        .all()
+    )
     total_budget = sum(b.limit_value for b in budgets)
     total_spent = (
         db.query(func.coalesce(func.sum(Transaction.value), 0))
@@ -394,7 +436,7 @@ def get_index(
             parent_map[root.id]["cat"] = root
         parent_map[root.id]["budgets"].append(item_info)
 
-    budgets_parent_info = []
+    budgets_parent_info = {}
     for root_id, data in parent_map.items():
         root_cat = data["cat"]
         if not root_cat:
@@ -403,19 +445,59 @@ def get_index(
         total_limit = sum(it["limit_value"] for it in items)
         total_spent_group = sum(it["spent_value"] for it in items)
         progress = 0 if total_limit <= 0 else round((total_spent_group / total_limit) * 100, 1)
-        budgets_parent_info.append(
-            {
-                "root_id": root_cat.id,
-                "root_name": root_cat.name,
-                "root_icon": root_cat.icon,
-                "root_color": root_cat.color,
-                "items": items,
-                "total_limit": total_limit,
-                "total_spent": total_spent_group,
-                "progress": progress,
-                "bar_color": progress_color(progress),
-            }
-        )
+        budgets_parent_info[root_id] = {
+            "root_id": root_cat.id,
+            "root_name": root_cat.name,
+            "root_icon": root_cat.icon,
+            "root_color": root_cat.color,
+            "items": items,
+            "total_limit": total_limit,
+            "total_spent": total_spent_group,
+            "progress": progress,
+            "bar_color": progress_color(progress),
+        }
+
+    for cat in categories:
+        if cat.id not in [b.category_id for b in budgets]:
+
+            spent_val = (
+                db.query(func.coalesce(func.sum(Transaction.value), 0))
+                .filter(
+                    Transaction.user_id == user.id,
+                    Transaction.category_id == cat.id,
+                    Transaction.paid_at >= start_date,
+                    Transaction.paid_at <= end_date,
+                )
+                .scalar()
+            )
+            spent_val = float(spent_val or 0.0)
+            if spent_val > 0:
+                root_cat = get_root_category(cat)
+                if root_cat.id not in list(budgets_parent_info.keys()):
+                    budgets_parent_info[root_cat.id] = {
+                        "root_id": root_cat.id,
+                        "root_name": root_cat.name,
+                        "root_icon": root_cat.icon,
+                        "root_color": root_cat.color,
+                        "items": [],
+                        "total_limit": 0,
+                        "total_spent": 0,
+                        "progress": 0,
+                        "bar_color": progress_color(0),
+                    }
+                item_info = {
+                    "budget_id": None,
+                    "cat_id": cat.id,
+                    "cat_name": cat.name,
+                    "cat_icon": cat.icon,
+                    "cat_color": cat.color,
+                    "limit_value": 0,
+                    "spent_value": spent_val,
+                }
+                budgets_parent_info[root_cat.id]["items"].append(item_info)
+                budgets_parent_info[root_cat.id]["total_cat"] = sum(
+                    [x["spent_value"] for x in budgets_parent_info[root_cat.id]["items"]]
+                )
 
     return templates.TemplateResponse(
         "pages/index.html",
@@ -435,8 +517,11 @@ def get_index(
             "entrou": entrou,
             "saiu": saiu,
             "sobrou": sobrou,
+            "entrou_preview": entrou_preview,
+            "saiu_preview": saiu_preview,
+            "sobrou_preview": sobrou_preview,
             "orcamento_percent": orcamento_percent,
-            "budgets_parent_info": budgets_parent_info,
+            "budgets_parent_info": list(budgets_parent_info.values()),
             "transacoes_efetuadas": transacoes_efetuadas,
             "transacoes_pendentes": transacoes_pendentes,
             "total_paid": total_paid,
@@ -450,43 +535,80 @@ def get_index(
     )
 
 
-@router.post("/transactions/{transaction_id}/mark_paid")
-def mark_transaction_paid(
-    transaction_id: int,
+@router.post("/registry_payment")
+def registry_payment(
     request: Request,
+    transaction_id: str = Body(...),
+    description: str = Body(...),
+    payment_date: datetime = Body(...),
+    value: float = Body(...),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    transaction = (
-        db.query(Transaction)
-        .filter(Transaction.id == transaction_id, Transaction.user_id == user.id)
-        .first()
-    )
-    if not transaction:
-        alert_error(request, "Transação não encontrada")
-        return RedirectResponse(url="/", status_code=303)
-    transaction.paid_at = datetime.now()
-    db.commit()
+    if len(transaction_id.split(",")) > 1:
+        # invoice
+        transaction_ids = [int(x) for x in transaction_id.split(",")]
+        transactions = (
+            db.query(Transaction)
+            .filter(Transaction.id.in_(transaction_ids), Transaction.user_id == user.id)
+            .all()
+        )
+
+        total_value = sum(
+            t.value if t.category.type == CategoryType.expense else -t.value for t in transactions
+        )
+        print(float(total_value))
+        print(float(value))
+        if float(total_value) != float(value):
+            card = db.query(Card).filter(Card.id == transactions[0].card_id).first()
+            ajust_value = float(total_value) - float(value)
+            if ajust_value < 0:
+                cartegory = (
+                    db.query(Category)
+                    .filter(Category.type == CategoryType.expense, Category.name == "Outras Saídas")
+                    .first()
+                )
+            else:
+                cartegory = (
+                    db.query(Category)
+                    .filter(
+                        Category.type == CategoryType.income, Category.name == "Outras Entradas"
+                    )
+                    .first()
+                )
+            ajust_value = abs(ajust_value)
+            print("cartegory.name", cartegory.name)
+            print("ajust_value", ajust_value)
+
+            # create ajust transaction
+            transaction = Transaction(
+                user_id=user.id,
+                account_id=card.account_id,
+                card_id=card.id,
+                category_id=cartegory.id,
+                description="Ajuste de valor Fatura",
+                value=ajust_value,
+                due_at=transactions[-1].due_at,
+                paid_at=payment_date,
+            )
+            db.add(transaction)
+
+        for t in transactions:
+            t.paid_at = payment_date
+        db.commit()
+    else:
+        transaction = (
+            db.query(Transaction)
+            .filter(Transaction.id == transaction_id, Transaction.user_id == user.id)
+            .first()
+        )
+        if not transaction:
+            alert_error(request, "Transação não encontrada")
+            return RedirectResponse(url="/", status_code=303)
+        transaction.paid_at = payment_date
+        transaction.description = description
+        transaction.value = value
+        db.commit()
+
     alert_success(request, "Transação marcada como paga!")
-    return RedirectResponse(url="/", status_code=303)
-
-
-@router.post("/cards/pay_invoice")
-def pay_card_invoice(
-    request: Request,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-    transaction_ids: str = Form(...),
-):
-    transaction_ids = [int(x) for x in transaction_ids.split(",")]
-    transactions = (
-        db.query(Transaction)
-        .filter(Transaction.id.in_(transaction_ids), Transaction.user_id == user.id)
-        .all()
-    )
-    paid_at = datetime.now()
-    for t in transactions:
-        t.paid_at = paid_at
-    db.commit()
-    alert_success(request, "Fatura paga com sucesso!")
     return RedirectResponse(url="/", status_code=303)

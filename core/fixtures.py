@@ -28,19 +28,16 @@ def fixtures():
             user_id=user.id,
             name="Conta Corrente Santander",
             bank=BankName.santander,
-            balance=0.00,
         ),
         Account(
             user_id=user.id,
             name="Conta Corrente NuBank",
             bank=BankName.nubank,
-            balance=0.00,
         ),
         Account(
             user_id=user.id,
             name="Carteira Digital C6 Bank",
             bank=BankName.c6bank,
-            balance=0.00,
         ),
     ]
     db.add_all(accounts)
@@ -55,7 +52,6 @@ def fixtures():
             brand=BrandName.visa,
             close_day=14,
             due_day=21,
-            credit_limit=30500.00,
         ),
         Card(
             user_id=user.id,
@@ -64,7 +60,6 @@ def fixtures():
             brand=BrandName.mastercard,
             close_day=21,
             due_day=28,
-            credit_limit=30600.00,
         ),
         Card(
             user_id=user.id,
@@ -73,7 +68,6 @@ def fixtures():
             brand=BrandName.mastercard,
             close_day=14,
             due_day=20,
-            credit_limit=11000.00,
         ),
     ]
     db.add_all(cards)
@@ -89,6 +83,86 @@ def fixtures():
         color="#4CAF50",
     )
 
+    cat_transferencia = Category(
+        user_id=user.id,
+        name="Transferência em contas",
+        type="transfer",
+        icon="fas fa-exchange-alt",
+        color="#607D8B",
+        system_category=True,
+    )
+    cat_fatura = Category(
+        user_id=user.id,
+        name="Pagamento Fatura",
+        type="invoice",
+        icon="fas fa-credit-card",
+        color="#FF5722",
+        system_category=True,
+    )
+    cat_ajuste_fatura_income = Category(
+        user_id=user.id,
+        name="Ajuste Fatura Para Mais",
+        type="expense",
+        icon="fas fa-plus-circle",
+        color="#4CAF50",
+        system_category=True,
+    )
+    cat_ajuste_fatura_expense = Category(
+        user_id=user.id,
+        name="Ajuste Fatura Para Menos",
+        type="income",
+        icon="fas fa-minus-circle",
+        color="#F44336",
+        system_category=True,
+    )
+    cat_estorno = Category(
+        user_id=user.id,
+        name="Estorno Fatura",
+        type="income",
+        icon="fas fa-minus-circle",
+        color="#F44336",
+        system_category=True,
+    )
+    cat_outras_entradas = Category(
+        user_id=user.id,
+        name="Outras Entradas",
+        type="income",
+        icon="fas fa-plus-circle",
+        color="#4CAF50",
+        system_category=True,
+    )
+    cat_outras_saidas = Category(
+        user_id=user.id,
+        name="Outras Saídas",
+        type="expense",
+        icon="fas fa-minus-circle",
+        color="#F44336",
+        system_category=True,
+    )
+
+    cat_pix_cc_income = Category(
+        user_id=user.id,
+        name="Empréstimo Pix Recebido",
+        type="income",
+        icon="fas fa-exchange-alt",
+        color="#607D8B",
+    )
+    cat_pix_cc_expense = Category(
+        user_id=user.id,
+        name="Empréstimo Pix Pagamento",
+        type="expense",
+        icon="fas fa-exchange-alt",
+        color="#607D8B",
+    )
+    # 13. Outras Saídas (despesa)
+
+    cat_amortizacao = Category(
+        user_id=user.id,
+        name="Amortização Fatura",
+        type="expense",
+        icon="fas fa-credit-card",
+        color="#FF5722",
+    )
     # 2. Alimentação (despesa)
     cat_alimentacao = Category(
         user_id=user.id,
@@ -113,14 +187,14 @@ def fixtures():
         icon="fas fa-car",
         color="#FFC107",
     )
-    # 5. Pais (despesa)
-    cat_pais = Category(
+    cat_saude = Category(
         user_id=user.id,
-        name="Pais",
+        name="Saúde",
         type="expense",
-        icon="fas fa-user-friends",
-        color="#8E24AA",
+        icon="fas fa-user-md",
+        color="#FF5722",
     )
+
     # 6. Filhos (despesa)
     cat_filhos = Category(
         user_id=user.id,
@@ -170,22 +244,6 @@ def fixtures():
         icon="fas fa-glass-cheers",
         color="#E91E63",
     )
-    # 12. Outras Entradas (entrada)
-    cat_outras_entradas = Category(
-        user_id=user.id,
-        name="Outras Entradas",
-        type="income",
-        icon="fas fa-plus-circle",
-        color="#4CAF50",
-    )
-    # 13. Outras Saídas (despesa)
-    cat_outras_saidas = Category(
-        user_id=user.id,
-        name="Outras Saídas",
-        type="expense",
-        icon="fas fa-minus-circle",
-        color="#F44336",
-    )
     cat_banco = Category(
         user_id=user.id,
         name="Banco",
@@ -194,12 +252,29 @@ def fixtures():
         color="#FF5722",
     )
 
+    # Gastos Essenciais
+    cat_gastos_essenciais = Category(
+        user_id=user.id,
+        name="Gastos Essenciais",
+        type="expense",
+        icon="fas fa-shopping-basket",
+        color="#FF5722",
+    )
+
     parent_categories = [
         cat_salario,
+        cat_ajuste_fatura_income,
+        cat_ajuste_fatura_expense,
+        cat_transferencia,
+        cat_pix_cc_income,
+        cat_pix_cc_expense,
+        cat_fatura,
+        cat_amortizacao,
+        cat_estorno,
         cat_alimentacao,
         cat_casa,
         cat_carro,
-        cat_pais,
+        cat_saude,
         cat_filhos,
         cat_cachorros,
         cat_servicos,
@@ -209,6 +284,7 @@ def fixtures():
         cat_outras_entradas,
         cat_outras_saidas,
         cat_banco,
+        cat_gastos_essenciais,
     ]
     db.add_all(parent_categories)
     db.commit()
@@ -310,6 +386,14 @@ def fixtures():
         # Carro
         Category(
             user_id=user.id,
+            name="Estacionamento",
+            type="expense",
+            icon="fas fa-parking",
+            color="#FFA000",
+            parent_id=cat_carro.id,
+        ),
+        Category(
+            user_id=user.id,
             name="Combustivel",
             type="expense",
             icon="fas fa-gas-pump",
@@ -340,64 +424,40 @@ def fixtures():
             color="#BF360C",
             parent_id=cat_carro.id,
         ),
-        # Pais
+        # Saude
         Category(
             user_id=user.id,
             name="Farmácia",
             type="expense",
             icon="fas fa-prescription-bottle-alt",
-            color="#6A1B9A",
-            parent_id=cat_pais.id,
+            color="#D32F2F",
+            parent_id=cat_saude.id,
         ),
         Category(
             user_id=user.id,
             name="Consultas Médicas",
             type="expense",
             icon="fas fa-user-md",
-            color="#4A148C",
-            parent_id=cat_pais.id,
-        ),
-        Category(
-            user_id=user.id,
-            name="Gastos Esseciais",
-            type="expense",
-            icon="fas fa-shopping-basket",
-            color="#311B92",
-            parent_id=cat_pais.id,
-        ),
-        Category(
-            user_id=user.id,
-            name="Gastos",
-            type="expense",
-            icon="fas fa-money-bill-wave",
-            color="#283593",
-            parent_id=cat_pais.id,
-        ),
-        # Filhos
-        Category(
-            user_id=user.id,
-            name="Farmácia",
-            type="expense",
-            icon="fas fa-prescription-bottle-alt",
-            color="#388E3C",
-            parent_id=cat_filhos.id,
-        ),
-        Category(
-            user_id=user.id,
-            name="Consultas Médicas",
-            type="expense",
-            icon="fas fa-user-md",
-            color="#2E7D32",
-            parent_id=cat_filhos.id,
+            color="#C62828",
+            parent_id=cat_saude.id,
         ),
         Category(
             user_id=user.id,
             name="Plano de Saúde",
             type="expense",
             icon="fas fa-notes-medical",
-            color="#1B5E20",
-            parent_id=cat_filhos.id,
+            color="#B71C1C",
+            parent_id=cat_saude.id,
         ),
+        Category(
+            user_id=user.id,
+            name="Exames",
+            type="expense",
+            icon="fas fa-vial",
+            color="#A41C1C",
+            parent_id=cat_saude.id,
+        ),
+        # Filhos
         Category(
             user_id=user.id,
             name="Escola",
@@ -547,7 +607,7 @@ def fixtures():
         ),
         Category(
             user_id=user.id,
-            name="ICloud",
+            name="Apple",
             type="expense",
             icon="fab fa-apple",
             color="#A2AAAD",
@@ -626,7 +686,6 @@ def fixtures():
             color="#757575",
             parent_id=cat_viagem.id,
         ),
-        # Lazer
         Category(
             user_id=user.id,
             name="Encontros",
@@ -699,6 +758,94 @@ def fixtures():
             icon="fas fa-money-check-alt",
             color="#FF5722",
             parent_id=cat_banco.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Jogos",
+            type="expense",
+            icon="fas fa-gamepad",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Loteria",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Presentes",
+            type="expense",
+            icon="fas fa-gift",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Rifas",
+            type="expense",
+            icon="fas fa-money-check-alt",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Marketplaces",
+            type="expense",
+            icon="fas fa-shopping-cart",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Desconhecidas",
+            type="expense",
+            icon="fas fa-question",
+            color="#FF5722",
+            parent_id=cat_outras_saidas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Doações",
+            type="income",
+            icon="fas fa-hand-holding-heart",
+            color="#4CAF50",
+            parent_id=cat_outras_entradas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Empréstimos",
+            type="income",
+            icon="fas fa-hand-holding-usd",
+            color="#4CAF50",
+            parent_id=cat_outras_entradas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Investimentos",
+            type="income",
+            icon="fas fa-chart-line",
+            color="#4CAF50",
+            parent_id=cat_outras_entradas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Vendas",
+            type="income",
+            icon="fas fa-handshake",
+            color="#4CAF50",
+            parent_id=cat_outras_entradas.id,
+        ),
+        Category(
+            user_id=user.id,
+            name="Desconhecidas",
+            type="income",
+            icon="fas fa-question",
+            color="#FF5722",
+            parent_id=cat_outras_entradas.id,
         ),
     ]
     db.add_all(subcategories)
