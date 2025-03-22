@@ -40,16 +40,16 @@ app.add_middleware(
 )
 
 
-# @app.on_event("startup")
-# def startup_event():
-#     Base.metadata.drop_all(bind=engine)
-#     inspector = inspect(engine)
-#     for table in Base.metadata.tables.keys():
-#         if not inspector.has_table(table):
-#             print(f"Criando tabela: {table}")
-#             Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.drop_all(bind=engine)
+    inspector = inspect(engine)
+    for table in Base.metadata.tables.keys():
+        if not inspector.has_table(table):
+            print(f"Criando tabela: {table}")
+            Base.metadata.create_all(bind=engine)
 
-#     fixtures()
+    fixtures()
 
 
 # Registrar rotas

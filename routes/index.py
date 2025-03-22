@@ -498,6 +498,9 @@ def get_index(
                 budgets_parent_info[root_cat.id]["total_cat"] = sum(
                     [x["spent_value"] for x in budgets_parent_info[root_cat.id]["items"]]
                 )
+    budgets_parent_info = [list(budgets_parent_info.values())]
+    # sorted by total_cat
+    budgets_parent_info = sorted(budgets_parent_info[0], key=lambda x: x["total_cat"], reverse=True)
 
     return templates.TemplateResponse(
         "pages/index.html",
@@ -521,7 +524,7 @@ def get_index(
             "saiu_preview": saiu_preview,
             "sobrou_preview": sobrou_preview,
             "orcamento_percent": orcamento_percent,
-            "budgets_parent_info": list(budgets_parent_info.values()),
+            "budgets_parent_info": budgets_parent_info,
             "transacoes_efetuadas": transacoes_efetuadas,
             "transacoes_pendentes": transacoes_pendentes,
             "total_paid": total_paid,

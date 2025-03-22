@@ -984,10 +984,16 @@ def create_transactions(
     if is_recurring and recurring_frequency:
         last_due = due_at
         while not recurring_end_date or last_due.year == today.year:
-            if recurring_frequency == "mensal":
-                last_due = add_months(last_due, 1)
-            elif recurring_frequency == "semanal":
+            if recurring_frequency == "semanal":
                 last_due += timedelta(days=7)
+            elif recurring_frequency == "mensal":
+                last_due = add_months(last_due, 1)
+            elif recurring_frequency == "bimestral":
+                last_due = add_months(last_due, 2)
+            elif recurring_frequency == "trimestral":
+                last_due = add_months(last_due, 3)
+            elif recurring_frequency == "semestral":
+                last_due = add_months(last_due, 6)
             elif recurring_frequency == "anual":
                 last_due = add_months(last_due, 12)
             else:

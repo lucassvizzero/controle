@@ -130,7 +130,16 @@ class Transaction(Base):
 
     is_recurring = Column(Boolean, default=False)
     recurring_frequency = Column(
-        Enum("mensal", "semanal", "anual", name="frequency_type"), nullable=True
+        Enum(
+            "semanal",
+            "mensal",
+            "bimestral",
+            "trimestral",
+            "semestral",
+            "anual",
+            name="frequency_type",
+        ),
+        nullable=True,
     )
     recurring_end_date = Column(Date, nullable=True)
     installments = Column(Integer, nullable=True)
