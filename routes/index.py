@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import and_, asc, desc, func, or_
+from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -260,6 +260,7 @@ def get_index(
     paid_per_page: int = Query(15),
     pending_page: int = Query(1),
     pending_per_page: int = Query(15),
+    is_preview: bool = Query(False, alias="preview"),
 ):
     # Determina o "mês nominal" se não forem passados year e month
     if not year or not month:
@@ -281,22 +282,7 @@ def get_index(
     prev_year, prev_month = shift_month(year, month, -1)
     next_year, next_month = shift_month(year, month, 1)
 
-    # Transações Efetuadas (pagas) com paginação
-    paid_query = (
-        db.query(Transaction)
-        .join(Category, Transaction.category_id == Category.id)
-        .filter(Transaction.user_id == user.id)
-        .filter(Transaction.paid_at.isnot(None))
-        .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
-        .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
-        .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
-    )
-    transacoes_efetuada_all = paid_query.all()
-    transacoes_efetuadas = convert_index_transactions(transacoes_efetuada_all)
-    total_paid = len(transacoes_efetuadas)
-    transacoes_efetuadas = make_pagination(transacoes_efetuadas, paid_page, paid_per_page)
     cards = db.query(Card).filter(Card.user_id == user.id).all()
-
     query_or = [
         and_(
             Transaction.card_id.is_(None),
@@ -334,6 +320,35 @@ def get_index(
                 Transaction.due_at <= invoice_end_date,
             )
         )
+    # Transações Efetuadas (pagas) com paginação
+    paid_query = (
+        db.query(Transaction)
+        .join(Category, Transaction.category_id == Category.id)
+        .filter(Transaction.user_id == user.id)
+        .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
+        .filter(Transaction.paid_at.isnot(None))
+        .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
+        .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
+    )
+
+    transacoes_efetuada_all = paid_query.all()
+
+    if is_preview:
+        pending_query = (
+            db.query(Transaction)
+            .join(Category, Transaction.category_id == Category.id)
+            .filter(Transaction.user_id == user.id)
+            .filter(Transaction.paid_at.is_(None))
+            .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
+            .filter(or_(*query_or))
+            .order_by(asc(Transaction.due_at))
+        )
+        transacoes_efetuada_all += pending_query.all()
+
+    transacoes_efetuadas = convert_index_transactions(transacoes_efetuada_all)
+    total_paid = len(transacoes_efetuadas)
+    transacoes_efetuadas = make_pagination(transacoes_efetuadas, paid_page, paid_per_page)
+
     # Transações Pendentes com paginação
     pending_query = (
         db.query(Transaction)
@@ -346,6 +361,8 @@ def get_index(
     )
 
     transacoes_pendente_all = pending_query.all()
+    if is_preview:
+        transacoes_pendente_all = []
     transacoes_pendentes = convert_index_transactions(transacoes_pendente_all)
     total_pending = len(transacoes_pendentes)
     transacoes_pendentes = make_pagination(transacoes_pendentes, pending_page, pending_per_page)
@@ -388,15 +405,12 @@ def get_index(
         .all()
     )
     total_budget = sum(b.limit_value for b in budgets)
-    total_spent = (
-        db.query(func.coalesce(func.sum(Transaction.value), 0))
-        .filter(
-            Transaction.user_id == user.id,
-            Transaction.category_id.in_([b.category_id for b in budgets]),
-            Transaction.paid_at >= start_date,
-            Transaction.paid_at <= end_date,
-        )
-        .scalar()
+    total_spent = sum(
+        [
+            t.value
+            for t in transacoes_efetuada_all
+            if t.category_id in [b.category_id for b in budgets]
+        ]
     )
     orcamento_percent = 0
     if total_budget > 0:
@@ -412,16 +426,7 @@ def get_index(
     for b in budgets:
         cat = b.category
         root = get_root_category(cat)
-        spent_val = (
-            db.query(func.coalesce(func.sum(Transaction.value), 0))
-            .filter(
-                Transaction.user_id == user.id,
-                Transaction.category_id == cat.id,
-                Transaction.paid_at >= start_date,
-                Transaction.paid_at <= end_date,
-            )
-            .scalar()
-        )
+        spent_val = sum([t.value for t in transacoes_efetuada_all if t.category_id == cat.id])
         spent_val = float(spent_val or 0.0)
         item_info = {
             "budget_id": b.id,
@@ -459,17 +464,7 @@ def get_index(
 
     for cat in categories:
         if cat.id not in [b.category_id for b in budgets]:
-
-            spent_val = (
-                db.query(func.coalesce(func.sum(Transaction.value), 0))
-                .filter(
-                    Transaction.user_id == user.id,
-                    Transaction.category_id == cat.id,
-                    Transaction.paid_at >= start_date,
-                    Transaction.paid_at <= end_date,
-                )
-                .scalar()
-            )
+            spent_val = sum([t.value for t in transacoes_efetuada_all if t.category_id == cat.id])
             spent_val = float(spent_val or 0.0)
             if spent_val > 0:
                 root_cat = get_root_category(cat)

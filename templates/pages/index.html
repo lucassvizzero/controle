@@ -5,17 +5,73 @@
 
 {% block content %}
   {% include "components/alerts.html" %}
+  <style>
+    /* Estilização do switch */
+    .relative.w-10 {
+        transition: background-color 0.3s ease-in-out;
+    }
+    .relative.w-10.active {
+        background-color: #4CAF50;
+    }
+    .absolute {
+        transition: transform 0.3s ease-in-out;
+    }
+    .absolute.move {
+        transform: translateX(100%);
+    }
+    </style>
+    <script>
+      
+      
+      // Alterna o estado do switch e altera a UI
+      function toggleSwitch(name) {
+          const checkbox = document.getElementById(name);
+          checkbox.checked = !checkbox.checked;
+          checkbox.value = checkbox.checked;
+          toggleSwitchUI(name, checkbox.checked);
+          document.getElementById("form-preview").submit();
+      }
+
+      // Atualiza a UI do switch
+      function toggleSwitchUI(name, isChecked) {
+          const switchBg = document.getElementById(name).nextElementSibling;
+          const toggle = document.getElementById(name + "-toggle");
+
+          if (isChecked) {
+              switchBg.classList.add("active");
+              toggle.classList.add("move");
+          } else {
+              switchBg.classList.remove("active");
+              toggle.classList.remove("move");
+          }
+      }
+      
+    window.addEventListener("DOMContentLoaded", function () {
+        const previewInput = document.getElementById("preview");
+        toggleSwitchUI("preview", previewInput.checked);
+    });
+    </script>
+  <!-- Switches para ativar e desativar Previsão -->
+  <div class="flex items-center justify-center space-x-4 mb-4">
+    <form id="form-preview" method="GET">
+      <input type="switch" name="preview" id="preview" class="hidden" value="{{ request.query_params.get('preview') }}" {% if request.query_params.get("preview") == "true" %}checked{% endif %}>
+      <div class="relative w-10 h-5 bg-gray-300 rounded-full cursor-pointer" onclick="toggleSwitch('preview')">
+          <div id="preview-toggle" class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform"></div>
+      </div>
+    </form>
+    <span>Preview</span>
+  </div>
 
   <!-- Navegação de Meses -->
   <div class="flex items-center justify-center mb-4 space-x-4">
-    <a href="/?year={{ prev_year }}&month={{ prev_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}" class="bg-gray-300 px-3 py-1 rounded">&laquo; Mês Anterior</a>
+    <a href="/?year={{ prev_year }}&month={{ prev_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="bg-gray-300 px-3 py-1 rounded">&laquo; Mês Anterior</a>
     <h2 class="text-xl font-semibold">
       {{ month_name }}
       <span class="text-sm text-gray-500">
         ({{ start_date|strftime('%d/%m/%Y') }} a {{ end_date|strftime('%d/%m/%Y') }})
       </span>
     </h2>
-    <a href="/?year={{ next_year }}&month={{ next_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}" class="bg-gray-300 px-3 py-1 rounded">Próximo Mês &raquo;</a>
+    <a href="/?year={{ next_year }}&month={{ next_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="bg-gray-300 px-3 py-1 rounded">Próximo Mês &raquo;</a>
   </div>
 
   <!-- Resumos -->
@@ -132,11 +188,13 @@
       <!-- Paginação para transações efetuadas -->
       <div class="flex justify-between mt-2">
         {% if paid_page > 1 %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
+          " class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
         {% endif %}
         <span>Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }} ({{ total_paid }} registros)</span>
         {% if total_paid > paid_page * paid_per_page %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
+          " class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
         {% endif %}
       </div>
     </div>
@@ -202,11 +260,13 @@
       <!-- Paginação para transações pendentes -->
       <div class="flex justify-between mt-2">
         {% if pending_page > 1 %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
+          " class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
         {% endif %}
         <span>Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }}  ({{ total_pending }} registros)</span>
         {% if total_pending > pending_page * pending_per_page %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}" class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
+          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
+          " class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
         {% endif %}
       </div>
     </div>
