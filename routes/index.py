@@ -269,8 +269,6 @@ def get_index(
         if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
             if today.day >= FIRST_DAY_OF_MONTH:
                 year, month = shift_month(year, month, 1)
-            else:
-                year, month = shift_month(year, month, -1)
 
     start_date, end_date = get_period_range(year, month)
 
@@ -330,8 +328,11 @@ def get_index(
         .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
         .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
     )
+    print("start_date", start_date)
+    print("end_date", end_date)
 
     transacoes_efetuada_all = paid_query.all()
+    print("transacoes_efetuada_all", [t.description for t in transacoes_efetuada_all if t.category.type == "income"])
 
     if is_preview:
         pending_query = (

@@ -71,6 +71,7 @@ def get_transactions(
     paid_at_start: str = Query(None, alias="f_paid_at_start"),
     paid_at_end: str = Query(None, alias="f_paid_at_end"),
     category_type: str = Query(None, alias="f_category_type"),
+    transaction_type: str = Query(None, alias="f_transaction_type"),
 ):
     # Base query com joins para poder ordenar por campos relacionados
     query = (
@@ -90,7 +91,10 @@ def get_transactions(
     if account_id:
         query = query.filter(Transaction.account_id == account_id)
     if card_id:
-        query = query.filter(Transaction.card_id == card_id)
+        if card_id == "none":
+            query = query.filter(Transaction.card_id.is_(None))
+        else:
+            query = query.filter(Transaction.card_id == card_id)
     if category_id:
         query = query.filter(Transaction.category_id == category_id)
     if category_type:
@@ -104,11 +108,20 @@ def get_transactions(
             query = query.filter(Transaction.due_at <= end_date)
     if paid_at_start or paid_at_end:
         if paid_at_start:
-            start_date = date.fromisoformat(paid_at_start)
+            start_date = datetime.fromisoformat(paid_at_start)
             query = query.filter(Transaction.paid_at >= start_date)
         if paid_at_end:
-            end_date = date.fromisoformat(paid_at_end)
+            end_date = datetime.fromisoformat(paid_at_end)
             query = query.filter(Transaction.paid_at <= end_date)
+    if transaction_type:
+        if transaction_type == "recurring":
+            query = query.filter(Transaction.is_recurring.is_(True))
+        elif transaction_type == "installment":
+            query = query.filter(Transaction.installments.isnot(None))
+        elif transaction_type == "none":
+            query = query.filter(
+                Transaction.is_recurring.is_(False), Transaction.installments.is_(None)
+            )
 
     sort_map = {
         "id": Transaction.id,
@@ -299,7 +312,7 @@ def get_transactions(
             name="card_id",
             label="Cartão",
             type="combobox",
-            options=card_options,
+            options=[{"value": "none", "label": "Sem Cartão"}] + card_options,
         ),
         FilterField(
             name="category_id",
@@ -316,6 +329,16 @@ def get_transactions(
                 ComboboxOption(value=CategoryType.expense.value, label="Despesa"),
                 ComboboxOption(value=CategoryType.transfer.value, label="Transferência"),
                 ComboboxOption(value=CategoryType.invoice.value, label="Pagamento de Fatura"),
+            ],
+        ),
+        FilterField(
+            name="transaction_type",
+            label="Recorrencia",
+            type="combobox",
+            options=[
+                ComboboxOption(value="none", label="Nenhum"),
+                ComboboxOption(value="recurring", label="Recorrente"),
+                ComboboxOption(value="installment", label="Parcelado"),
             ],
         ),
         FilterField(name="due_at_start", label="Vencimento de", type="date"),
@@ -611,6 +634,7 @@ def edit_transaction(
     is_installment: bool = Form(False),
     total_installments: str = Form(None),
     current_installment: str = Form(None),
+    next_occurrences: bool = Form(False),
 ):
     """Edita uma transação existente. O valor é sempre armazenado como positivo."""
     url_redirect = "/transactions"
@@ -654,99 +678,99 @@ def edit_transaction(
     transaction.due_at = due_at
     transaction.paid_at = paid_at
     db.commit()
-
-    if transaction.is_recurring and not is_recurring:
-        print("Deixou de ser recorrente")
-        # Delete all future recurring transactions
-        cleanup_next_transactions(db, transaction.id)
-        transaction.is_recurring = False
-        transaction.recurring_frequency = None
-        transaction.recurring_end_date = None
-        db.commit()
-        if transaction.parent_id:
-            parent_id = transaction.parent_id
-            while parent_id:
-                parent_transaction = (
-                    db.query(Transaction).filter(Transaction.parent_id == parent_id).first()
-                )
-                if parent_transaction:
-                    parent_transaction.recurring_end_date = transaction.due_at
-                    if parent_transaction.parent_id:
-                        parent_id = parent_transaction.parent_id
+    if next_occurrences:
+        if transaction.is_recurring and not is_recurring:
+            print("Deixou de ser recorrente")
+            # Delete all future recurring transactions
+            cleanup_next_transactions(db, transaction.id)
+            transaction.is_recurring = False
+            transaction.recurring_frequency = None
+            transaction.recurring_end_date = None
+            db.commit()
+            if transaction.parent_id:
+                parent_id = transaction.parent_id
+                while parent_id:
+                    parent_transaction = (
+                        db.query(Transaction).filter(Transaction.parent_id == parent_id).first()
+                    )
+                    if parent_transaction:
+                        parent_transaction.recurring_end_date = transaction.due_at
+                        if parent_transaction.parent_id:
+                            parent_id = parent_transaction.parent_id
+                        else:
+                            parent_id = None
+                        db.commit()
                     else:
                         parent_id = None
-                    db.commit()
-                else:
-                    parent_id = None
 
-    elif is_recurring:
-        print("É recorrente")
-        # Create all future recurring transactions
-        create_transactions(
-            user,
-            db,
-            transaction.account,
-            transaction.card,
-            transaction.category_id,
-            transaction.description,
-            transaction.value,
-            transaction.due_at,
-            transaction.paid_at,
-            is_recurring,
-            recurring_frequency,
-            recurring_end_date,
-            is_installment,
-            total_installments,
-            current_installment,
-            parent_id=transaction.parent_id,
-        )
-        # delete old transaction
-        db.delete(transaction)
-        db.commit()
+        elif is_recurring:
+            print("É recorrente")
+            # Create all future recurring transactions
+            create_transactions(
+                user,
+                db,
+                transaction.account,
+                transaction.card,
+                transaction.category_id,
+                transaction.description,
+                transaction.value,
+                transaction.due_at,
+                transaction.paid_at,
+                is_recurring,
+                recurring_frequency,
+                recurring_end_date,
+                is_installment,
+                total_installments,
+                current_installment,
+                parent_id=transaction.parent_id,
+            )
+            # delete old transaction
+            db.delete(transaction)
+            db.commit()
 
-    if transaction.installments and not is_installment:
-        print("Deixou de ser parcelado")
-        # Delete all future installment transactions
-        cleanup_next_transactions(db, transaction.id)
-        description = description.split(") ")[1] if description.startswith("(") else description
-        if transaction.parent_id:
-            parent_id = transaction.parent_id
-            total_installments = transaction.current_installment - 1
-            modify_parent_transaction_info(db, description, total_installments, parent_id)
+        if transaction.installments and not is_installment:
+            print("Deixou de ser parcelado")
+            # Delete all future installment transactions
+            cleanup_next_transactions(db, transaction.id)
+            description = description.split(") ")[1] if description.startswith("(") else description
+            if transaction.parent_id:
+                parent_id = transaction.parent_id
+                total_installments = transaction.current_installment - 1
+                modify_parent_transaction_info(db, description, total_installments, parent_id)
 
-        db.delete(transaction)
-        db.commit()
+            db.delete(transaction)
+            db.commit()
 
-    elif is_installment:
-        print("É parcelado")
-        # Create all future installment transactions
-        # Create all future recurring transactions
-        description = description.split(") ")[1] if description.startswith("(") else description
-        if transaction.parent_id:
-            parent_id = transaction.parent_id
-            modify_parent_transaction_info(db, description, total_installments, parent_id)
+        elif is_installment:
+            print("É parcelado")
+            # Create all future installment transactions
+            # Create all future recurring transactions
+            description = description.split(") ")[1] if description.startswith("(") else description
+            if transaction.parent_id:
+                parent_id = transaction.parent_id
+                modify_parent_transaction_info(db, description, total_installments, parent_id)
 
-        create_transactions(
-            user,
-            db,
-            transaction.account,
-            transaction.card,
-            transaction.category_id,
-            description,
-            transaction.value,
-            transaction.due_at,
-            transaction.paid_at,
-            is_recurring,
-            recurring_frequency,
-            recurring_end_date,
-            is_installment,
-            total_installments,
-            current_installment,
-            parent_id=transaction.parent_id,
-        )
-        # delete old transaction
-        db.delete(transaction)
-        db.commit()
+            create_transactions(
+                user,
+                db,
+                transaction.account,
+                transaction.card,
+                transaction.category_id,
+                description,
+                transaction.value,
+                transaction.due_at,
+                transaction.paid_at,
+                is_recurring,
+                recurring_frequency,
+                recurring_end_date,
+                is_installment,
+                total_installments,
+                current_installment,
+                parent_id=transaction.parent_id,
+            )
+            # delete old transaction
+            db.delete(transaction)
+            db.commit()
     return RedirectResponse(url=url_redirect, status_code=303)
 
 
@@ -771,6 +795,7 @@ def modify_parent_transaction_info(db, description, total_installments, parent_i
 def delete_transaction(
     request: Request,
     transaction_id: int,
+    next_occurrences: bool = Form(False),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -789,17 +814,19 @@ def delete_transaction(
         alert_error(request, "Transação não encontrada")
         return RedirectResponse(url=url_redirect, status_code=303)
     try:
-        if transaction.installments:
-            description = (
-                transaction.description.split(") ")[1]
-                if transaction.description.startswith("(")
-                else transaction.description
-            )
-            total_installments = transaction.current_installment - 1
-            parent_id = transaction.parent_id
-            modify_parent_transaction_info(db, description, total_installments, parent_id)
+        if next_occurrences:
+            if transaction.installments:
+                description = (
+                    transaction.description.split(") ")[1]
+                    if transaction.description.startswith("(")
+                    else transaction.description
+                )
+                total_installments = transaction.current_installment - 1
+                parent_id = transaction.parent_id
+                modify_parent_transaction_info(db, description, total_installments, parent_id)
 
-        cleanup_next_transactions(db, transaction.id)
+            cleanup_next_transactions(db, transaction.id)
+
         db.delete(transaction)
         db.commit()
         alert_success(request, "Transação excluída com sucesso!")

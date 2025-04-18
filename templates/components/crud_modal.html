@@ -4,6 +4,7 @@
         <h2 id="modal-title" class="text-xl font-bold mb-4">Adicionar Item</h2>
         <form id="crud-form" method="POST">
             <input type="hidden" name="item_id" id="item-id">
+            <input type="hidden" name="next_occurrences" id="next-occurrences" value="false">
 
             {% for field in crud_schema %}
                 <div class="mb-4">
@@ -43,8 +44,10 @@
             {% endfor %}
 
             <div class="flex justify-between mt-4">
-                <button type="submit" id="save-btn" class="bg-blue-500 text-white py-2 px-4 rounded">Salvar</button>
-                <button type="button" id="delete-btn" class="hidden bg-red-500 text-white py-2 px-4 rounded">Excluir</button>
+                <button type="button" id="save-btn" class="bg-blue-500 text-white py-2 px-4 rounded">Salvar</button>
+                {% if permissions.delete %}
+                    <button type="button" id="delete-btn" class="bg-red-500 text-white py-2 px-4 rounded">Excluir</button>
+                {% endif %}
                 <button type="button" id="cancel-btn" class="bg-gray-500 text-white py-2 px-4 rounded">Cancelar</button>
             </div>
         </form>
@@ -346,21 +349,79 @@ async function openModal(mode, id = null) {
     const form = document.getElementById("crud-form");
     const title = document.getElementById("modal-title");
     const saveBtn = document.getElementById("save-btn");
+    const deleteBtn = document.getElementById("delete-btn");
     const cancelBtn = document.getElementById("cancel-btn");
     cancelBtn.addEventListener("click", () => {
         document.getElementById("crud-modal").classList.add("hidden");
     });
-    const deleteBtn = document.getElementById("delete-btn");
-    const entity = "{{ entity }}";
+    
+    saveBtn.onclick = async () => {
+        const isRecurring = document.getElementById("is_recurring")?.checked;
+        const isInstallment = document.getElementById("is_installment")?.checked;
 
+        if (isRecurring || isInstallment) {
+            const result = await Swal.fire({
+                title: "Alterar recorrência?",
+                text: "Deseja aplicar esta alteração apenas nesta ocorrência ou também nas próximas?",
+                icon: "question",
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: "Somente esta",
+                denyButtonText: "Próximas também",
+                cancelButtonText: "Cancelar"
+            });
+
+            if (result.isConfirmed) {
+                document.getElementById("next-occurrences").value = "false";
+                form.submit();
+            } else if (result.isDenied) {
+                document.getElementById("next-occurrences").value = "true";
+                form.submit();
+            } // Se cancelar, nada acontece
+        } else {
+            form.submit(); // Se não for recorrente, envia normalmente
+        }
+    };
+    
+    deleteBtn.onclick = async () => {
+        form.action = `/${entity}/${id}/delete`;
+        const isRecurring = document.getElementById("is_recurring")?.checked;
+        const isInstallment = document.getElementById("is_installment")?.checked;
+
+        if (isRecurring || isInstallment) {
+            const result = await Swal.fire({
+                title: "Deletar recorrência?",
+                text: "Deseja deletar apenas esta ocorrência ou também as próximas?",
+                icon: "question",
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: "Somente esta",
+                denyButtonText: "Próximas também",
+                cancelButtonText: "Cancelar"
+            });
+            if (result.isConfirmed) {
+                document.getElementById("next-occurrences").value = "false";
+                form.submit();
+            } else if (result.isDenied) {
+                document.getElementById("next-occurrences").value = "true";
+                form.submit();
+            } // Se cancelar, nada acontece
+        } else {
+            form.submit(); // Se não for recorrente, envia normalmente
+        }
+    };
+
+    const entity = "{{ entity }}";
     if (mode === 'add') {
         title.innerText = "Adicionar Item";
         form.action = `/${entity}`;
         form.reset();
         document.getElementById("item-id").value = "";
         saveBtn.classList.remove("hidden");
-        deleteBtn.classList.add("hidden");
         modal.classList.remove("hidden");
+        saveBtn.addEventListener("click", () => {
+            form.submit();
+        });
         loadIcons("icon");
     } else if (mode === 'edit') {
         title.innerText = "Editar Item";
@@ -376,12 +437,10 @@ async function openModal(mode, id = null) {
         }
 
         saveBtn.classList.remove("hidden");
-        deleteBtn.classList.remove("hidden");
         loadIcons("icon");
     } else if (mode === 'delete') {
-        if (!confirm("Tem certeza que deseja excluir este item?")) return;
-        form.action = `/${entity}/${id}/delete`;
-        form.submit();
+        await loadEntity(id);
+        deleteBtn.click();
     }
 }
 
@@ -427,6 +486,7 @@ async function loadEntity(id) {
             }
         }
     {% endfor %}
+    return data;
 }
 
 document.getElementById("color").addEventListener("input", function () {
