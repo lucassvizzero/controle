@@ -69,6 +69,7 @@ class CategoryType(str, enum.Enum):
     expense = "expense"
     transfer = "transfer"
     invoice = "invoice"
+    investment = "investment"
 
 
 class CategoryOut(BaseModel):

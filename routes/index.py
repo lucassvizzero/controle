@@ -332,7 +332,10 @@ def get_index(
     print("end_date", end_date)
 
     transacoes_efetuada_all = paid_query.all()
-    print("transacoes_efetuada_all", [t.description for t in transacoes_efetuada_all if t.category.type == "income"])
+    print(
+        "transacoes_efetuada_all",
+        [t.description for t in transacoes_efetuada_all if t.category.type == "income"],
+    )
 
     if is_preview:
         pending_query = (
@@ -375,13 +378,14 @@ def get_index(
         if t.category.type == CategoryType.income and t.card_id is None
     )
     saiu = sum(t.value for t in transacoes_efetuada_all if t.category.type == CategoryType.expense)
+    investiu = sum(t.value for t in transacoes_efetuada_all if t.category.type == CategoryType.investment)
     credito_cartao = sum(
         t.value
         for t in transacoes_efetuada_all
         if t.category.type == CategoryType.income and t.card_id is not None
     )
     saiu = saiu - credito_cartao
-    sobrou = entrou - saiu
+    sobrou = entrou - (saiu + investiu)
 
     entrou_preview = (
         sum(
@@ -438,6 +442,15 @@ def get_index(
             "limit_value": float(b.limit_value),
             "spent_value": spent_val,
         }
+        item_info["transactions"] = [
+            {
+                "description": t.description,
+                "value": float(t.value),
+                "paid_at": t.paid_at.strftime("%d/%m/%Y") if t.paid_at else "",
+            }
+            for t in transacoes_efetuada_all
+            if t.category_id == cat.id
+        ]
         if parent_map[root.id]["cat"] is None:
             parent_map[root.id]["cat"] = root
         parent_map[root.id]["budgets"].append(item_info)
@@ -490,6 +503,15 @@ def get_index(
                     "limit_value": 0,
                     "spent_value": spent_val,
                 }
+                item_info["transactions"] = [
+                    {
+                        "description": t.description,
+                        "value": float(t.value),
+                        "paid_at": t.paid_at.strftime("%d/%m/%Y") if t.paid_at else "",
+                    }
+                    for t in transacoes_efetuada_all
+                    if t.category_id == cat.id
+                ]
                 budgets_parent_info[root_cat.id]["items"].append(item_info)
                 budgets_parent_info[root_cat.id]["total_cat"] = sum(
                     [x["spent_value"] for x in budgets_parent_info[root_cat.id]["items"]]
@@ -515,6 +537,7 @@ def get_index(
             "end_date": end_date,
             "entrou": entrou,
             "saiu": saiu,
+            "investiu": investiu,
             "sobrou": sobrou,
             "entrou_preview": entrou_preview,
             "saiu_preview": saiu_preview,

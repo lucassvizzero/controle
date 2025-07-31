@@ -145,8 +145,8 @@ def get_transactions(
     columns = [
         Column(label="ID", type="number", sort=True, sort_key="id"),
         Column(label="Conta", type="text", sort=True, sort_key="account"),
-        Column(label="Categoria", type="html", sort=True, sort_key="category"),
         Column(label="Cartão", type="text", sort=True, sort_key="card"),
+        Column(label="Categoria", type="html", sort=True, sort_key="category"),
         Column(label="Descrição", type="text", sort=True, sort_key="description"),
         Column(label="Valor", type="currency", sort=True, sort_key="value"),
         Column(label="Vencimento", type="date", sort=True, sort_key="due_at"),
@@ -159,7 +159,7 @@ def get_transactions(
         if t.category and t.category.icon and t.category.color:
             category_html = (
                 f"<i class='{t.category.icon} text-xl' style='color:{t.category.color}'></i>"
-                f" {t.category.name}"
+                f" {t.category.name if not t.category.parent_id else f' {t.category.parent.name} > {t.category.name}'}" 
             )
         elif t.category:
             category_html = t.category.name
@@ -173,8 +173,8 @@ def get_transactions(
             [
                 t.id,
                 account_name,
-                category_html,
                 card_name,
+                category_html,
                 t.description or "",
                 display_value,
                 t.due_at,
@@ -826,6 +826,16 @@ def delete_transaction(
                 modify_parent_transaction_info(db, description, total_installments, parent_id)
 
             cleanup_next_transactions(db, transaction.id)
+        else:
+            up_parent_id = None
+            if transaction.parent_id:
+                up_parent_id = transaction.parent_id
+            transaction.parent_id = None
+            
+            child_transaction = (db.query(Transaction).filter(Transaction.parent_id == transaction.id).first())
+            if child_transaction:
+                child_transaction.parent_id = up_parent_id            
+            db.commit()
 
         db.delete(transaction)
         db.commit()

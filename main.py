@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
@@ -40,16 +39,10 @@ app.add_middleware(
 )
 
 
-# @app.on_event("startup")
-# def startup_event():
-#     Base.metadata.drop_all(bind=engine)
-#     inspector = inspect(engine)
-#     for table in Base.metadata.tables.keys():
-#         if not inspector.has_table(table):
-#             print(f"Criando tabela: {table}")
-#             Base.metadata.create_all(bind=engine)
-
-#     fixtures()
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
+    fixtures()
 
 
 # Registrar rotas

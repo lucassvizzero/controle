@@ -407,7 +407,20 @@ async function openModal(mode, id = null) {
                 form.submit();
             } // Se cancelar, nada acontece
         } else {
-            form.submit(); // Se não for recorrente, envia normalmente
+            const result = await Swal.fire({
+                title: "Deletar?",
+                text: "Certeza que deseja deletar?",
+                icon: "question",
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: "Sim",
+                denyButtonText: "Não",
+                cancelButtonText: "Cancelar"
+            });
+            if (result.isConfirmed) {
+                form.submit();
+            }
+             // Se cancelar, nada acontece
         }
     };
 

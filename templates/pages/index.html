@@ -23,13 +23,23 @@
     <script>
       
       
-      // Alterna o estado do switch e altera a UI
+
       function toggleSwitch(name) {
-          const checkbox = document.getElementById(name);
-          checkbox.checked = !checkbox.checked;
-          checkbox.value = checkbox.checked;
-          toggleSwitchUI(name, checkbox.checked);
-          document.getElementById("form-preview").submit();
+        const checkbox = document.getElementById(name);
+        checkbox.checked = !checkbox.checked;
+        checkbox.value = checkbox.checked;
+
+        toggleSwitchUI(name, checkbox.checked);
+
+        // Atualiza os queryParams da URL
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+
+        // Atualiza o parâmetro "preview"
+        params.set(name, checkbox.checked ? "true" : "false");
+
+        // Redireciona com os novos parâmetros
+        window.location.href = `${url.pathname}?${params.toString()}`;
       }
 
       // Atualiza a UI do switch
@@ -77,20 +87,20 @@
   <!-- Resumos -->
   <div class="grid grid-cols-4 gap-4 mb-6">
     <div class="bg-green-100 p-4 rounded shadow">
-      <p class="text-gray-500">Entrou (R$ {{ entrou_preview|float|round(2) }})</p>
+      <p class="text-gray-500">Entrou</p>
       <p class="text-2xl text-green-600">R$ {{ entrou|float|round(2) }}</p>
     </div>
     <div class="bg-red-100 p-4 rounded shadow">
-      <p class="text-gray-500">Saiu (R$ {{ saiu_preview|float|round(2) }})</p>
+      <p class="text-gray-500">Saiu</p>
       <p class="text-2xl text-red-600">R$ {{ saiu|float|round(2) }}</p>
     </div>
-    <div class="bg-blue-100 p-4 rounded shadow">
-      <p class="text-gray-500">Sobrou (R$ {{ sobrou_preview|float|round(2) }})</p>
-      <p class="text-2xl text-blue-600">R$ {{ sobrou|float|round(2) }}</p>
-    </div>
     <div class="bg-yellow-100 p-4 rounded shadow">
-      <p class="text-gray-500">Orçamento</p>
-      <p class="text-2xl text-yellow-600">{{ orcamento_percent }}%</p>
+      <p class="text-gray-500">Investiu</p>
+      <p class="text-2xl text-yellow-600">R$ {{ investiu|float|round(2) }}</p>
+    </div>
+    <div class="bg-blue-100 p-4 rounded shadow">
+      <p class="text-gray-500">Sobrou</p>
+      <p class="text-2xl text-blue-600">R$ {{ sobrou|float|round(2) }}</p>
     </div>
   </div>
 
@@ -434,18 +444,32 @@ function openInvoiceDetail(transactions) {
         const barColor = progressColor(itemProgress);
 
         content.innerHTML += `
-          <div class="border p-2 rounded mb-2">
+        <details class="border p-2 rounded mb-2">
+          <summary class="flex items-center justify-between cursor-pointer">
             <div class="flex items-center space-x-2">
               <i class="${item.cat_icon || 'fas fa-folder'} text-xl" style="color:${item.cat_color || '#999'}"></i>
               <span class="font-bold">${item.cat_name}</span>
             </div>
-            <p>R$ ${itemSpent} / R$ ${itemLimit > 0 ? itemLimit : "-"}</p>
-            <div class="w-full bg-gray-200 rounded h-3 mt-1">
+            <span class="text-sm text-gray-500">R$ ${itemSpent} / ${itemLimit > 0 ? "R$ " + itemLimit : "-"}</span>
+          </summary>
+          <div class="mt-2">
+            <div class="w-full bg-gray-200 rounded h-3 mb-1">
               <div class="h-3 rounded" style="width:${Math.min(itemProgress,100)}%; background-color:${barColor};"></div>
             </div>
             <small class="text-gray-600">${itemProgress}%</small>
+
+            <ul class="mt-2 text-sm text-gray-700 space-y-1">
+              ${(item.transactions || []).map(t => `
+                <li class="flex justify-between border-b py-1">
+                  <span>${t.description}</span>
+                  <span>R$ ${t.value.toFixed(2)} <small class="text-gray-500">(${t.paid_at})</small></span>
+                </li>
+              `).join('')}
+            </ul>
           </div>
-        `;
+        </details>
+      `;
+
       });
 
       modal.classList.remove("hidden");
