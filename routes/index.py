@@ -665,6 +665,32 @@ def registry_payment(
     return RedirectResponse(url="/", status_code=303)
 
 
+@router.post("/undo-payment")
+def undo_payment(
+    request: Request,
+    transaction_id: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Remove o pagamento de uma transação, devolvendo-a para pendente."""
+    ids = [int(x) for x in transaction_id.split(",")]
+    transactions = (
+        db.query(Transaction)
+        .filter(Transaction.id.in_(ids), Transaction.user_id == user.id)
+        .all()
+    )
+    if not transactions:
+        alert_error(request, "Transação não encontrada.")
+        return RedirectResponse(url="/", status_code=303)
+
+    for t in transactions:
+        t.paid_at = None
+    db.commit()
+
+    alert_success(request, "Pagamento desfeito. Transação voltou para pendente.")
+    return RedirectResponse(url="/", status_code=303)
+
+
 @router.post("/adjust-sobrou")
 def adjust_sobrou(
     request: Request,
