@@ -1,36 +1,38 @@
 version: '3.8'
 
 services:
-  # Banco de dados PostgreSQL
   postgres:
     image: postgres:15-alpine
     container_name: finance_db
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: finance
+    env_file: .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - finance_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Aplicação Python (FastAPI)
   app:
     build: .
     container_name: finance_api
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
       - .:/app
-    environment:
-      DATABASE_URL: postgresql://admin:secret@postgres:5432/finance
+    env_file: .env
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - finance_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:

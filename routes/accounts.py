@@ -128,7 +128,7 @@ def get_accounts(
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    return templates.TemplateResponse("pages/accounts.html", context.model_dump())
+    return templates.TemplateResponse(request, "pages/accounts.html", context.model_dump())
 
 
 @router.get("/accounts/{account_id}", response_model=AccountOut)

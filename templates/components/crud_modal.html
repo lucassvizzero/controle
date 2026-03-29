@@ -343,7 +343,7 @@ window.loadIcons = loadIcons;
 window.selectIcon = selectIcon;
 window.setColorIcon = setColorIcon;
 
-async function openModal(mode, id = null) {
+async function openModal(mode, id = null, url_redirect = null) {
     
     const modal = document.getElementById("crud-modal");
     const form = document.getElementById("crud-form");
@@ -354,6 +354,14 @@ async function openModal(mode, id = null) {
     cancelBtn.addEventListener("click", () => {
         document.getElementById("crud-modal").classList.add("hidden");
     });
+    
+    if (url_redirect) {
+        const urlInput = document.createElement("input");
+        urlInput.type = "hidden";
+        urlInput.name = "url_redirect";
+        urlInput.value = url_redirect;
+        form.appendChild(urlInput);
+    }
     
     saveBtn.onclick = async () => {
         const isRecurring = document.getElementById("is_recurring")?.checked;
@@ -427,6 +435,7 @@ async function openModal(mode, id = null) {
     const entity = "{{ entity }}";
     if (mode === 'add') {
         title.innerText = "Adicionar Item";
+        
         form.action = `/${entity}`;
         form.reset();
         document.getElementById("item-id").value = "";

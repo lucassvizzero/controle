@@ -1,22 +1,20 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from passlib.context import CryptContext
 from pydantic import EmailStr
 from sqlalchemy.orm import Session
 
+from core.auth import pwd_context
 from core.database import get_db
 from core.models import User
 from core.templates import templates
 
 router = APIRouter()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 @router.get("/register")
 def get_register(request: Request):
     """Rota para exibir o formulário de cadastro."""
-    return templates.TemplateResponse("register.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request, "register.html", {"error": None})
 
 
 @router.post("/register")
@@ -32,7 +30,7 @@ def post_register(
 
     if existing_user:
         return templates.TemplateResponse(
-            "register.html", {"request": request, "error": "E-mail já cadastrado"}
+            request, "register.html", {"error": "E-mail já cadastrado"}
         )
 
     hashed_password = pwd_context.hash(password)

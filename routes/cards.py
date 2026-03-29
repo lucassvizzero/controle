@@ -154,7 +154,7 @@ def get_cards(
         total_count=total_count,
     )
 
-    return templates.TemplateResponse("pages/cards.html", context.model_dump())
+    return templates.TemplateResponse(request, "pages/cards.html", context.model_dump())
 
 
 @router.get("/cards/{card_id}", response_model=CardOut)

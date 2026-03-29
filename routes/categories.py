@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import asc, desc
-from sqlalchemy.orm import Session
+from sqlalchemy import asc, desc, func
+from sqlalchemy.orm import Session, joinedload
 
 from core.database import get_db
 from core.models import Category, Transaction
@@ -59,7 +59,28 @@ def get_categories(
         query = query.order_by(asc(sort_column))
 
     total_count = query.count()
-    categories = query.offset((page - 1) * per_page).limit(per_page).all()
+    categories = (
+        query.offset((page - 1) * per_page)
+        .limit(per_page)
+        .options(joinedload(Category.subcategories))
+        .all()
+    )
+
+    # Busca contagem de transações de todas as categorias relevantes em uma única query
+    all_cat_ids = []
+    for cat in categories:
+        all_cat_ids.append(cat.id)
+        all_cat_ids.extend(sub.id for sub in cat.subcategories)
+
+    tx_counts: dict[int, int] = {}
+    if all_cat_ids:
+        tx_counts = dict(
+            db.query(Transaction.category_id, func.count(Transaction.id))
+            .filter(Transaction.category_id.in_(all_cat_ids))
+            .filter(Transaction.is_deleted.is_(False))
+            .group_by(Transaction.category_id)
+            .all()
+        )
 
     # Monta as colunas usando os schemas (Column)
     columns = [
@@ -79,13 +100,10 @@ def get_categories(
             else cat.name
         )
         cat_type = "Receita" if cat.type == CategoryType.income else "Despesa"
-        subcats = db.query(Category).filter(Category.parent_id == cat.id).all()
-        transactions_count = db.query(Transaction).filter(Transaction.category_id == cat.id).count()
-        for sub in subcats:
-            transactions_count += (
-                db.query(Transaction).filter(Transaction.category_id == sub.id).count()
-            )
-        values.append([cat.id, name_html, cat_type, len(subcats), transactions_count])
+        transactions_count = tx_counts.get(cat.id, 0) + sum(
+            tx_counts.get(sub.id, 0) for sub in cat.subcategories
+        )
+        values.append([cat.id, name_html, cat_type, len(cat.subcategories), transactions_count])
 
     # Cria o schema para o CRUD (para o modal de adicionar/editar)
     parent_options = [ComboboxOption(value="", label="Ninguém")]
@@ -190,7 +208,7 @@ def get_categories(
         total_count=total_count,
     )
 
-    return templates.TemplateResponse("pages/categories.html", context.model_dump())
+    return templates.TemplateResponse(request, "pages/categories.html", context.model_dump())
 
 
 @router.get("/categories/{category_id}/details", response_model=CategoryDetail)
@@ -319,7 +337,7 @@ def create_category(
         db.add(new_category)
         db.commit()
         alert_success(request, "Categoria cadastrada com sucesso")
-    except Exception:
+    except Exception as e:
         alert_error(request, f"Erro ao cadastrar categoria: {str(e)}")
     return RedirectResponse(url="/categories", status_code=303)
 

@@ -1,154 +1,56 @@
-from passlib.context import CryptContext
+import logging
 
+from core.auth import pwd_context
 from core.database import get_db
 from core.models import Account, Card, Category, User
 from core.schemas import BankName, BrandName
+
+logger = logging.getLogger(__name__)
+
+
+def _get_or_create_category(db, user_id, name, **kwargs):
+    existing = (
+        db.query(Category)
+        .filter(Category.user_id == user_id, Category.name == name)
+        .first()
+    )
+    if not existing:
+        cat = Category(user_id=user_id, name=name, **kwargs)
+        db.add(cat)
+        return cat
+    return existing
+
 
 def fixtures():
     db = next(get_db())
     users = db.query(User).all()
     for user in users:
-        cat_transferencia = Category(
-            user_id=user.id,
-            name="Transferência em contas",
-            type="transfer",
-            icon="fas fa-exchange-alt",
-            color="#607D8B",
-            system_category=True,
-        )
-        cat_fatura = Category(
-            user_id=user.id,
-            name="Pagamento Fatura",
-            type="invoice",
-            icon="fas fa-credit-card",
-            color="#FF5722",
-            system_category=True,
-        )
-        cat_ajuste_fatura_income = Category(
-            user_id=user.id,
-            name="Ajuste Fatura Para Mais",
-            type="expense",
-            icon="fas fa-plus-circle",
-            color="#4CAF50",
-            system_category=True,
-        )
-        cat_ajuste_fatura_expense = Category(
-            user_id=user.id,
-            name="Ajuste Fatura Para Menos",
-            type="income",
-            icon="fas fa-minus-circle",
-            color="#F44336",
-            system_category=True,
-        )
-        cat_outras_entradas = Category(
-            user_id=user.id,
-            name="Outras Entradas",
-            type="income",
-            icon="fas fa-plus-circle",
-            color="#4CAF50",
-            system_category=True,
-        )
-        cat_investimento = Category(
-            user_id=user.id,
-            name="Investimento",
-            type="investment",
-            icon="fas fa-plus-circle",
-            color="#4CAF50",
-            system_category=True,
-        )
-        cat_outras_saidas = Category(
-            user_id=user.id,
-            name="Outras Saídas",
-            type="expense",
-            icon="fas fa-minus-circle",
-            color="#F44336",
-            system_category=True,
-        )
-        cat_salario = Category(
-            user_id=user.id,
-            name="Salário",
-            type="income",
-            icon="fas fa-wallet",
-            color="#4CAF50",
-        )
-        cat_alimentacao = Category(
-            user_id=user.id,
-            name="Alimentação",
-            type="expense",
-            icon="fas fa-utensils",
-            color="#FF0000",
-        )
-        cat_casa = Category(
-            user_id=user.id,
-            name="Casa",
-            type="expense",
-            icon="fas fa-home",
-            color="#2196F3",
-        )
-        cat_carro = Category(
-            user_id=user.id,
-            name="Carro",
-            type="expense",
-            icon="fas fa-car",
-            color="#FFC107",
-        )
-        cat_saude = Category(
-            user_id=user.id,
-            name="Saúde",
-            type="expense",
-            icon="fas fa-user-md",
-            color="#FF5722",
-        )
-        cat_servicos = Category(
-            user_id=user.id,
-            name="Serviços",
-            type="expense",
-            icon="fas fa-concierge-bell",
-            color="#9E9D24",
-        )
-        cat_viagem = Category(
-            user_id=user.id,
-            name="Viagem",
-            type="expense",
-            icon="fas fa-suitcase-rolling",
-            color="#795548",
-        )
-        cat_lazer = Category(
-            user_id=user.id,
-            name="Lazer",
-            type="expense",
-            icon="fas fa-glass-cheers",
-            color="#E91E63",
-        )
-        
-        parent_categories = [
-            cat_salario,
-            cat_investimento,
-            cat_ajuste_fatura_income,
-            cat_ajuste_fatura_expense,
-            cat_transferencia,
-            cat_fatura,
-            cat_alimentacao,
-            cat_casa,
-            cat_carro,
-            cat_saude,
-            cat_servicos,
-            cat_viagem,
-            cat_lazer,
-            cat_outras_entradas,
-            cat_outras_saidas,
+        default_categories = [
+            dict(name="Transferência em contas", type="transfer", icon="fas fa-exchange-alt", color="#607D8B", system_category=True),
+            dict(name="Pagamento Fatura", type="invoice", icon="fas fa-credit-card", color="#FF5722", system_category=True),
+            dict(name="Ajuste Fatura Para Mais", type="expense", icon="fas fa-plus-circle", color="#4CAF50", system_category=True),
+            dict(name="Ajuste Fatura Para Menos", type="income", icon="fas fa-minus-circle", color="#F44336", system_category=True),
+            dict(name="Outras Entradas", type="income", icon="fas fa-plus-circle", color="#4CAF50", system_category=True),
+            dict(name="Investimento", type="investment", icon="fas fa-plus-circle", color="#4CAF50", system_category=True),
+            dict(name="Outras Saídas", type="expense", icon="fas fa-minus-circle", color="#F44336", system_category=True),
+            dict(name="Salário", type="income", icon="fas fa-wallet", color="#4CAF50"),
+            dict(name="Alimentação", type="expense", icon="fas fa-utensils", color="#FF0000"),
+            dict(name="Casa", type="expense", icon="fas fa-home", color="#2196F3"),
+            dict(name="Carro", type="expense", icon="fas fa-car", color="#FFC107"),
+            dict(name="Saúde", type="expense", icon="fas fa-user-md", color="#FF5722"),
+            dict(name="Serviços", type="expense", icon="fas fa-concierge-bell", color="#9E9D24"),
+            dict(name="Viagem", type="expense", icon="fas fa-suitcase-rolling", color="#795548"),
+            dict(name="Lazer", type="expense", icon="fas fa-glass-cheers", color="#E91E63"),
         ]
-        for cat in parent_categories:
-            if not db.query(Category).filter(Category.name == cat.name).first():
-                db.add(cat)
+        for cat_data in default_categories:
+            _get_or_create_category(db, user.id, cat_data.pop("name"), **cat_data)
         db.commit()
-    print("Fixtures criadas com sucesso!")
+    logger.info("Fixtures aplicadas com sucesso.")
 
 
 def fixtures_dev():
     """Cria dados iniciais para testes: usuário, contas, cartões, categorias (pais e subcategorias),
     transações e orçamentos, incluindo as categorias solicitadas."""
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     db = next(get_db())
 
     # Criar usuário

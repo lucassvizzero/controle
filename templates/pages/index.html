@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard{% endblock %}
+
 {% block header %}{{ month_name }}{% endblock %}
 
 {% block content %}
   {% include "components/alerts.html" %}
+  {% include "components/crud_modal.html" %}
   <style>
     /* Estilização do switch */
     .relative.w-10 {
@@ -21,9 +23,6 @@
     }
     </style>
     <script>
-      
-      
-
       function toggleSwitch(name) {
         const checkbox = document.getElementById(name);
         checkbox.checked = !checkbox.checked;
@@ -153,9 +152,17 @@
 
   <!-- Transações: Paginação e Botão "Marcar como Paga" -->
   <div class="grid grid-cols-2 gap-6">
+   
     <!-- Transações Efetuadas -->
     <div>
-      <h3 class="text-lg font-bold mb-2">Transações Efetuadas</h3>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-bold">Transações Efetuadas</h3>
+          {% if permissions.add %}
+            <button onclick="openModal('add', null, window.location.href)" class="bg-blue-500 text-white px-4 py-2 rounded">
+              + Adicionar
+            </button>
+          {% endif %}
+        </div>
       <table class="min-w-full border">
         <thead class="bg-gray-200">
           <tr>
@@ -256,7 +263,11 @@
                             class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
                             💰 Pagar
                         </button>
+                        {% if permissions.edit %}
+                          <button onclick="openModal('edit', '{{ t.id }}', window.location.href)" class="bg-blue-500 text-white px-3 py-1 rounded">Editar</button>
+                        {% endif %}
                     {% endif %}
+                    
                 </div>
             </td>
             </tr>
@@ -357,7 +368,10 @@
         function openPaymentModal(transactionId, description, value) {
         document.getElementById("transaction-id").value = transactionId;
         document.getElementById("payment-description").value = description;
-        document.getElementById("payment-date").value = new Date().toISOString().split("T")[0];
+        const now = new Date();
+        const pad = n => String(n).padStart(2, "0");
+        document.getElementById("payment-date").value =
+          `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
         document.getElementById("payment-value").value = value;
         document.getElementById("payment-modal").classList.remove("hidden");
     }

@@ -1,4 +1,4 @@
-from sqlalchemy import DECIMAL, Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DECIMAL, Boolean, Column, Date, DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -38,6 +38,10 @@ class Account(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
+    __table_args__ = (
+        Index("idx_account_user_id", "user_id"),
+    )
+
     # Relacionamentos
     user = relationship("User", back_populates="accounts")
     cards = relationship("Card", back_populates="account", cascade="all, delete-orphan")
@@ -61,6 +65,10 @@ class Card(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
+    __table_args__ = (
+        Index("idx_card_user_id", "user_id"),
+    )
+
     # Relacionamentos
     user = relationship("User", back_populates="cards")
     account = relationship("Account", back_populates="cards")
@@ -81,6 +89,11 @@ class Category(Base):
     system_category = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_category_user_id", "user_id"),
+        Index("idx_category_user_parent", "user_id", "parent_id"),
+    )
 
     # Relacionamentos
     user = relationship("User", back_populates="categories")
@@ -105,6 +118,11 @@ class Budget(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
+    __table_args__ = (
+        Index("idx_budget_user_id", "user_id"),
+        Index("idx_budget_user_month", "user_id", "month"),
+    )
+
     # Relacionamentos
     user = relationship("User", back_populates="budgets")
     category = relationship("Category", back_populates="budgets")
@@ -127,6 +145,7 @@ class Transaction(Base):
     value = Column(DECIMAL(15, 2), nullable=False)
     due_at = Column(Date, nullable=False)
     paid_at = Column(DateTime, nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     is_recurring = Column(Boolean, default=False)
     recurring_frequency = Column(
@@ -144,6 +163,13 @@ class Transaction(Base):
     recurring_end_date = Column(Date, nullable=True)
     installments = Column(Integer, nullable=True)
     current_installment = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("idx_transaction_user_id", "user_id"),
+        Index("idx_transaction_user_paid_at", "user_id", "paid_at"),
+        Index("idx_transaction_user_category", "user_id", "category_id"),
+        Index("idx_transaction_card_id", "card_id"),
+    )
 
     # Relacionamentos
     user = relationship("User", back_populates="transactions")

@@ -148,7 +148,7 @@ def get_budgets(
         filter_schema=filter_schema,
         total_count=total_count,
     )
-    return templates.TemplateResponse("pages/budgets.html", context.model_dump())
+    return templates.TemplateResponse(request, "pages/budgets.html", context.model_dump())
 
 
 @router.get("/budgets/{budget_id}", response_model=BudgetOut)

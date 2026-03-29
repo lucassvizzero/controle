@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Cookie, Depends, Request
-from fastapi.templating import Jinja2Templates
+import logging
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -9,17 +9,7 @@ from core.models import User
 from core.settings import ALGORITHM, SECRET_KEY
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-from fastapi import Cookie, Depends, HTTPException
-from jose import jwt
-from sqlalchemy.orm import Session
-
-from core.database import get_db
-from core.models import User
-from core.settings import ALGORITHM, SECRET_KEY
+logger = logging.getLogger(__name__)
 
 
 def get_current_user(
@@ -43,7 +33,7 @@ def get_current_user(
         if not user:
             raise HTTPException(status_code=401, detail="Usuário não encontrado")
         request.state.user = user
-        print("setting user in request.state")
+        logger.debug("Usuário autenticado: %s", user_email)
         return user
 
     except jwt.ExpiredSignatureError:

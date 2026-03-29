@@ -1,19 +1,23 @@
 import calendar
 import json
+import logging
 from collections import defaultdict
 from datetime import date, datetime
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, asc, desc, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from core.database import get_db
-from core.models import Budget, Card, Category, Transaction
-from core.schemas import CategoryType, TransactionIndexOut
+from core.models import Budget, Card, Category, Transaction, Account
+from core.schemas import CategoryType, TransactionIndexOut, Permissions, ComboboxOption
 from core.templates import templates
 from core.utils import alert_error, alert_success, get_alerts
 from routes.auth import get_current_user
+from routes.transactions import get_schemas
+
+logger = logging.getLogger(__name__)
 
 month_translation = {
     "January": "Janeiro",
@@ -80,19 +84,21 @@ def get_period_range(year: int, month: int):
     if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
         prev_year, prev_month = shift_month(year, month, -1)
         _, last_day = calendar.monthrange(prev_year, prev_month)
-        start_date = date(
+        start_date = datetime(
             prev_year,
             prev_month,
             FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day,
+            0,0,0,0
         )
     else:
         _, last_day = calendar.monthrange(year, month)
-        start_date = date(
-            year, month, FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day
+        start_date = datetime(
+            year, month, FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day,
+            0,0,0,0
         )
 
     _, last_day = calendar.monthrange(year, month)
-    end_date = date(year, month, LAST_DAY_OF_MONTH if LAST_DAY_OF_MONTH <= last_day else last_day)
+    end_date = datetime(year, month, LAST_DAY_OF_MONTH if LAST_DAY_OF_MONTH <= last_day else last_day,23,59,59,999999   )
     return start_date, end_date
 
 
@@ -323,28 +329,27 @@ def get_index(
         db.query(Transaction)
         .join(Category, Transaction.category_id == Category.id)
         .filter(Transaction.user_id == user.id)
+        .filter(Transaction.is_deleted.is_(False))
         .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
         .filter(Transaction.paid_at.isnot(None))
         .filter(Transaction.paid_at >= start_date, Transaction.paid_at <= end_date)
+        .options(joinedload(Transaction.category), joinedload(Transaction.card))
         .order_by(desc(Transaction.paid_at), desc(Transaction.updated_at))
     )
-    print("start_date", start_date)
-    print("end_date", end_date)
+    logger.debug("Período: %s → %s", start_date, end_date)
 
     transacoes_efetuada_all = paid_query.all()
-    print(
-        "transacoes_efetuada_all",
-        [t.description for t in transacoes_efetuada_all if t.category.type == "income"],
-    )
 
     if is_preview:
         pending_query = (
             db.query(Transaction)
             .join(Category, Transaction.category_id == Category.id)
             .filter(Transaction.user_id == user.id)
+            .filter(Transaction.is_deleted.is_(False))
             .filter(Transaction.paid_at.is_(None))
             .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
             .filter(or_(*query_or))
+            .options(joinedload(Transaction.category), joinedload(Transaction.card))
             .order_by(asc(Transaction.due_at))
         )
         transacoes_efetuada_all += pending_query.all()
@@ -358,9 +363,11 @@ def get_index(
         db.query(Transaction)
         .join(Category, Transaction.category_id == Category.id)
         .filter(Transaction.user_id == user.id)
+        .filter(Transaction.is_deleted.is_(False))
         .filter(Transaction.paid_at.is_(None))
         .filter(Category.type.not_in([CategoryType.invoice, CategoryType.transfer]))
         .filter(or_(*query_or))
+        .options(joinedload(Transaction.category), joinedload(Transaction.card))
         .order_by(asc(Transaction.due_at))
     )
 
@@ -519,8 +526,29 @@ def get_index(
     budgets_parent_info = [list(budgets_parent_info.values())]
     # sorted by total_cat
     budgets_parent_info = sorted(budgets_parent_info[0], key=lambda x: x["total_cat"], reverse=True)
+     # Schemas para CRUD e filtros
+    account_options = [
+        ComboboxOption(value=acc.id, label=acc.name).model_dump()
+        for acc in db.query(Account).filter(Account.user_id == user.id).all()
+    ]
+    category_options = [
+        ComboboxOption(
+            value=cat.id, label=cat.name if not cat.parent_id else f"{cat.parent.name} > {cat.name}"
+        ).model_dump()
+        for cat in db.query(Category)
+        .filter(Category.user_id == user.id)
+        .options(joinedload(Category.parent))
+        .all()
+    ]
+    category_options = sorted(category_options, key=lambda x: x["label"])
+    card_options = [
+        ComboboxOption(value=c.id, label=c.name).model_dump()
+        for c in db.query(Card).filter(Card.user_id == user.id).all()
+    ]
+    crud_schema, filter_schema, upload_schema, permissions = get_schemas(account_options, category_options, card_options)
 
     return templates.TemplateResponse(
+        request,
         "pages/index.html",
         {
             "request": request,
@@ -553,6 +581,9 @@ def get_index(
             "pending_page": pending_page,
             "pending_per_page": pending_per_page,
             "current_date": date.today(),
+            "permissions": permissions,
+            "entity": "transactions",
+            "crud_schema": crud_schema,
         },
     )
 
@@ -579,35 +610,32 @@ def registry_payment(
         total_value = sum(
             t.value if t.category.type == CategoryType.expense else -t.value for t in transactions
         )
-        print(float(total_value))
-        print(float(value))
         if float(total_value) != float(value):
             card = db.query(Card).filter(Card.id == transactions[0].card_id).first()
             ajust_value = float(total_value) - float(value)
             if ajust_value < 0:
-                cartegory = (
+                category = (
                     db.query(Category)
-                    .filter(Category.type == CategoryType.expense, Category.name == "Outras Saídas")
+                    .filter(Category.user_id == user.id, Category.type == CategoryType.expense, Category.name == "Outras Saídas")
                     .first()
                 )
             else:
-                cartegory = (
+                category = (
                     db.query(Category)
                     .filter(
-                        Category.type == CategoryType.income, Category.name == "Outras Entradas"
+                        Category.user_id == user.id, Category.type == CategoryType.income, Category.name == "Outras Entradas"
                     )
                     .first()
                 )
             ajust_value = abs(ajust_value)
-            print("cartegory.name", cartegory.name)
-            print("ajust_value", ajust_value)
+            logger.debug("Ajuste fatura: categoria=%s, valor=%.2f", category.name if category else None, ajust_value)
 
             # create ajust transaction
             transaction = Transaction(
                 user_id=user.id,
                 account_id=card.account_id,
                 card_id=card.id,
-                category_id=cartegory.id,
+                category_id=category.id,
                 description="Ajuste de valor Fatura",
                 value=ajust_value,
                 due_at=transactions[-1].due_at,
@@ -627,8 +655,9 @@ def registry_payment(
         if not transaction:
             alert_error(request, "Transação não encontrada")
             return RedirectResponse(url="/", status_code=303)
+        
         transaction.paid_at = payment_date
-        transaction.description = description
+        transaction.description = description.replace("[Estimativa] ", "")
         transaction.value = value
         db.commit()
 

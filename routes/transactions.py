@@ -27,17 +27,10 @@ from core.templates import templates
 from core.utils import alert_error, alert_success
 from routes.auth import get_current_user
 
+import logging
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
-import io
-
-import pandas as pd
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
-from openpyxl.worksheet.datavalidation import DataValidation
-from sqlalchemy.orm import Session
-
-from core.database import get_db
-from core.models import Account, Card, Category
+logger = logging.getLogger(__name__)
 
 
 def add_months(source_date, months):
@@ -80,6 +73,7 @@ def get_transactions(
         .join(Category, Transaction.category_id == Category.id)
         .outerjoin(Card, Transaction.card_id == Card.id)
         .filter(Transaction.user_id == user.id)
+        .filter(Transaction.is_deleted.is_(False))
     )
     if situation:
         if situation == "1":
@@ -187,18 +181,34 @@ def get_transactions(
         ComboboxOption(value=acc.id, label=acc.name).model_dump()
         for acc in db.query(Account).filter(Account.user_id == user.id).all()
     ]
-
     category_options = [
         ComboboxOption(
             value=cat.id, label=cat.name if not cat.parent_id else f"{cat.parent.name} > {cat.name}"
         ).model_dump()
         for cat in db.query(Category).filter(Category.user_id == user.id).all()
     ]
+    category_options = sorted(category_options, key=lambda x: x["label"])
     card_options = [
         ComboboxOption(value=c.id, label=c.name).model_dump()
         for c in db.query(Card).filter(Card.user_id == user.id).all()
     ]
 
+    crud_schema, filter_schema, upload_schema, permissions = get_schemas(account_options, category_options, card_options)
+
+    context = TemplateContext(
+        request=request,
+        entity="transactions",
+        permissions=permissions,
+        columns=columns,
+        values=values,
+        crud_schema=crud_schema,
+        filter_schema=filter_schema,
+        upload_schema=upload_schema,
+        total_count=total_count,
+    )
+    return templates.TemplateResponse(request, "pages/transactions.html", context.model_dump())
+
+def get_schemas(account_options, category_options, card_options):
     crud_schema = [
         CrudField(
             name="account_id",
@@ -355,19 +365,7 @@ def get_transactions(
     )
 
     permissions = Permissions(add=True, edit=True, delete=True, upload=True, filter=True)
-
-    context = TemplateContext(
-        request=request,
-        entity="transactions",
-        permissions=permissions,
-        columns=columns,
-        values=values,
-        crud_schema=crud_schema,
-        filter_schema=filter_schema,
-        upload_schema=upload_schema,
-        total_count=total_count,
-    )
-    return templates.TemplateResponse("pages/transactions.html", context.model_dump())
+    return crud_schema,filter_schema,upload_schema,permissions
 
 
 @router.get("/transactions/download-template")
@@ -559,12 +557,14 @@ def create_transaction(
     is_installment: bool = Form(False),
     total_installments: str = Form(None),
     current_installment: str = Form(None),
+    url_redirect: str = Form(None),
 ):
     """Cria uma nova transação. O valor é sempre armazenado como positivo."""
-    url_redirect = "/transactions"
-    referer = request.headers.get("referer")
-    if referer and len(referer.split("?")) > 1:
-        url_redirect = url_redirect + f"?{referer.split('?')[1]}"
+    if not url_redirect:
+        url_redirect = "/transactions"
+        referer = request.headers.get("referer")
+        if referer and len(referer.split("?")) > 1:
+            url_redirect = url_redirect + f"?{referer.split('?')[1]}"
     account = db.query(Account).get(int(account_id))
     card = None
     if card_id:
@@ -635,12 +635,14 @@ def edit_transaction(
     total_installments: str = Form(None),
     current_installment: str = Form(None),
     next_occurrences: bool = Form(False),
+    url_redirect: str = Form(None),
 ):
     """Edita uma transação existente. O valor é sempre armazenado como positivo."""
-    url_redirect = "/transactions"
-    referer = request.headers.get("referer")
-    if referer and len(referer.split("?")) > 1:
-        url_redirect = url_redirect + f"?{referer.split('?')[1]}"
+    if not url_redirect:
+        url_redirect = "/transactions"
+        referer = request.headers.get("referer")
+        if referer and len(referer.split("?")) > 1:
+            url_redirect = url_redirect + f"?{referer.split('?')[1]}"
     transaction = (
         db.query(Transaction)
         .filter(Transaction.id == transaction_id, Transaction.user_id == user.id)
@@ -680,7 +682,7 @@ def edit_transaction(
     db.commit()
     if next_occurrences:
         if transaction.is_recurring and not is_recurring:
-            print("Deixou de ser recorrente")
+            logger.debug("Transação %d deixou de ser recorrente", transaction_id)
             # Delete all future recurring transactions
             cleanup_next_transactions(db, transaction.id)
             transaction.is_recurring = False
@@ -704,7 +706,7 @@ def edit_transaction(
                         parent_id = None
 
         elif is_recurring:
-            print("É recorrente")
+            logger.debug("Transação %d atualizada para recorrente", transaction_id)
             # Create all future recurring transactions
             create_transactions(
                 user,
@@ -729,7 +731,7 @@ def edit_transaction(
             db.commit()
 
         if transaction.installments and not is_installment:
-            print("Deixou de ser parcelado")
+            logger.debug("Transação %d deixou de ser parcelada", transaction_id)
             # Delete all future installment transactions
             cleanup_next_transactions(db, transaction.id)
             description = description.split(") ")[1] if description.startswith("(") else description
@@ -742,7 +744,7 @@ def edit_transaction(
             db.commit()
 
         elif is_installment:
-            print("É parcelado")
+            logger.debug("Transação %d atualizada para parcelada", transaction_id)
             # Create all future installment transactions
             # Create all future recurring transactions
             description = description.split(") ")[1] if description.startswith("(") else description
@@ -825,19 +827,23 @@ def delete_transaction(
                 parent_id = transaction.parent_id
                 modify_parent_transaction_info(db, description, total_installments, parent_id)
 
-            cleanup_next_transactions(db, transaction.id)
+            soft_delete_chain(db, transaction.id)
         else:
             up_parent_id = None
             if transaction.parent_id:
                 up_parent_id = transaction.parent_id
             transaction.parent_id = None
-            
-            child_transaction = (db.query(Transaction).filter(Transaction.parent_id == transaction.id).first())
+
+            child_transaction = (
+                db.query(Transaction)
+                .filter(Transaction.parent_id == transaction.id, Transaction.is_deleted.is_(False))
+                .first()
+            )
             if child_transaction:
-                child_transaction.parent_id = up_parent_id            
+                child_transaction.parent_id = up_parent_id
             db.commit()
 
-        db.delete(transaction)
+        transaction.is_deleted = True
         db.commit()
         alert_success(request, "Transação excluída com sucesso!")
     except Exception as e:
@@ -954,13 +960,14 @@ def upload_transactions(
 
     except Exception as e:
         db.rollback()
+        logger.exception("Erro ao processar upload de transações")
         alert_error(request, f"Erro ao processar upload: {str(e)}")
-        print(f"Erro ao processar upload: {e}")
 
     return
 
 
 def cleanup_next_transactions(db, parent_id):
+    """Hard delete em cadeia — usado internamente no fluxo de edição (substituição de transações)."""
     while parent_id:
         sub_transaction = (
             db.query(Transaction).filter(Transaction.parent_id == parent_id).one_or_none()
@@ -968,6 +975,22 @@ def cleanup_next_transactions(db, parent_id):
         if sub_transaction:
             parent_id = sub_transaction.id
             db.delete(sub_transaction)
+            db.commit()
+        else:
+            parent_id = None
+
+
+def soft_delete_chain(db, parent_id):
+    """Soft delete em cadeia — usado no delete explícito pelo usuário."""
+    while parent_id:
+        sub_transaction = (
+            db.query(Transaction)
+            .filter(Transaction.parent_id == parent_id, Transaction.is_deleted.is_(False))
+            .one_or_none()
+        )
+        if sub_transaction:
+            parent_id = sub_transaction.id
+            sub_transaction.is_deleted = True
             db.commit()
         else:
             parent_id = None
