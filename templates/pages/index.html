@@ -89,7 +89,14 @@
         <i class="fas fa-piggy-bank text-3xl"></i>
       </div>
       <div class="stat-title">Sobrou</div>
-      <div class="stat-value text-info text-2xl">R$ {{ "%.2f"|format(sobrou|float) }}</div>
+      <div class="stat-value text-info text-2xl flex items-center gap-2">
+        R$ {{ "%.2f"|format(sobrou|float) }}
+        <button
+          class="btn btn-xs btn-ghost text-info opacity-60 hover:opacity-100"
+          onclick="openAjusteSobrouModal({{ sobrou }}, {{ year }}, {{ month }})"
+          title="Ajustar Sobrou"
+        ><i class="fas fa-pencil-alt text-xs"></i></button>
+      </div>
     </div>
   </div>
 
@@ -504,5 +511,51 @@
         return `rgb(${r},${g},0)`;
       }
     }
+
+    function openAjusteSobrouModal(sobrouAtual, year, month) {
+      document.getElementById("ajuste-sobrou-atual").value = sobrouAtual.toFixed(2);
+      document.getElementById("ajuste-sobrou-novo").value = sobrouAtual.toFixed(2);
+      document.getElementById("ajuste-year").value = year;
+      document.getElementById("ajuste-month").value = month;
+      document.getElementById("ajuste-sobrou-modal").classList.remove("hidden");
+      document.getElementById("ajuste-sobrou-novo").select();
+    }
+
+    function closeAjusteSobrouModal() {
+      document.getElementById("ajuste-sobrou-modal").classList.add("hidden");
+    }
   </script>
+
+  <!-- Modal: Ajuste de Sobrou -->
+  <div id="ajuste-sobrou-modal"
+       class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+       onclick="closeAjusteSobrouModal()">
+    <div class="modal-box w-full max-w-sm shadow-2xl" onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closeAjusteSobrouModal()">✕</button>
+      <h2 class="text-xl font-bold mb-5">Ajustar Sobrou</h2>
+      <form method="post" action="/adjust-sobrou" class="space-y-4">
+        <input type="hidden" name="sobrou_atual" id="ajuste-sobrou-atual">
+        <input type="hidden" name="year" id="ajuste-year">
+        <input type="hidden" name="month" id="ajuste-month">
+        <div class="form-control">
+          <label for="ajuste-sobrou-novo" class="label pb-1">
+            <span class="label-text font-medium">Novo valor do Sobrou (R$)</span>
+          </label>
+          <input type="number" id="ajuste-sobrou-novo" name="novo_sobrou"
+                 step="0.01" class="input input-bordered" required>
+          <div class="label pt-1">
+            <span class="label-text-alt text-base-content/50">
+              A diferença será lançada automaticamente em Outras Entradas ou Outras Saídas.
+            </span>
+          </div>
+        </div>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-primary gap-2">
+            <i class="fas fa-check"></i> Confirmar
+          </button>
+          <button type="button" onclick="closeAjusteSobrouModal()" class="btn btn-ghost">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 {% endblock %}

@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, Query, Request
+from fastapi import APIRouter, Body, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.orm import Session, joinedload
@@ -663,3 +663,70 @@ def registry_payment(
 
     alert_success(request, "Transação marcada como paga!")
     return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/adjust-sobrou")
+def adjust_sobrou(
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+    novo_sobrou: float = Form(...),
+    sobrou_atual: float = Form(...),
+    year: int = Form(...),
+    month: int = Form(...),
+):
+    diff = round(novo_sobrou - sobrou_atual, 2)
+    if diff == 0:
+        return RedirectResponse(url=f"/?year={year}&month={month}", status_code=303)
+
+    _, end_date = get_period_range(year, month)
+    due_at = end_date.date()
+
+    if diff > 0:
+        categoria = (
+            db.query(Category)
+            .filter(
+                Category.user_id == user.id,
+                Category.name == "Outras Entradas",
+                Category.system_category == True,
+            )
+            .first()
+        )
+        cat_type = CategoryType.income
+    else:
+        categoria = (
+            db.query(Category)
+            .filter(
+                Category.user_id == user.id,
+                Category.name == "Outras Saídas",
+                Category.system_category == True,
+            )
+            .first()
+        )
+        cat_type = CategoryType.expense
+
+    if not categoria:
+        alert_error(request, "Categoria de ajuste não encontrada.")
+        return RedirectResponse(url=f"/?year={year}&month={month}", status_code=303)
+
+    account = db.query(Account).filter(Account.user_id == user.id).first()
+    if not account:
+        alert_error(request, "Nenhuma conta encontrada para lançar o ajuste.")
+        return RedirectResponse(url=f"/?year={year}&month={month}", status_code=303)
+
+    nova_transacao = Transaction(
+        user_id=user.id,
+        account_id=account.id,
+        category_id=categoria.id,
+        description="Ajuste Sobrou",
+        value=abs(diff),
+        due_at=due_at,
+        paid_at=due_at,
+        is_deleted=False,
+    )
+    db.add(nova_transacao)
+    db.commit()
+
+    tipo = "Outras Entradas" if diff > 0 else "Outras Saídas"
+    alert_success(request, f"Ajuste de R$ {abs(diff):.2f} lançado em {tipo}.")
+    return RedirectResponse(url=f"/?year={year}&month={month}", status_code=303)
