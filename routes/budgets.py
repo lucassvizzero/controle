@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -156,13 +156,9 @@ def get_budget(budget_id: int, db: Session = Depends(get_db), user=Depends(get_c
     """Retorna o orçamento para edição no modal."""
     budget = db.query(Budget).filter(Budget.id == budget_id, Budget.user_id == user.id).first()
     if not budget:
-        return {"error": "Orçamento não encontrado"}
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
 
-    return {
-        "category_id": budget.category_id,
-        "limit_value": float(budget.limit_value),
-        "month": budget.month.strftime("%Y-%m"),
-    }
+    return budget
 
 
 @router.post("/budgets")

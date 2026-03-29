@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -136,7 +136,7 @@ def get_account(account_id: int, db: Session = Depends(get_db), user=Depends(get
     """Retorna os detalhes da conta para edição."""
     account = db.query(Account).filter(Account.id == account_id, Account.user_id == user.id).first()
     if not account:
-        return {"error": "Conta não encontrada"}
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
 
     return account
 

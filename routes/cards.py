@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -162,7 +162,7 @@ def get_card(card_id: int, db: Session = Depends(get_db), user=Depends(get_curre
     """Retorna os detalhes do cartão para edição."""
     card = db.query(Card).filter(Card.id == card_id, Card.user_id == user.id).first()
     if not card:
-        return {"error": "Cartão não encontrado"}
+        raise HTTPException(status_code=404, detail="Cartão não encontrado")
 
     return card
 

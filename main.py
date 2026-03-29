@@ -4,9 +4,9 @@ import logging.config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 import core.settings as settings
 from core.database import Base, engine
@@ -22,14 +22,34 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, settings.SECRET_KEY)
 
 
-class RedirectUnauthorizedMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
+class RedirectUnauthorizedMiddleware:
+    """Pure ASGI middleware: redireciona respostas 401 para /login.
 
-        if response.status_code == 401:
-            return RedirectResponse(url="/login")
+    Evita o uso de BaseHTTPMiddleware que causa deadlock com TestClient
+    no Starlette 1.0.0 ao lidar com TemplateResponse (streaming body).
+    """
 
-        return response
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        messages: list = []
+
+        async def buffering_send(message: dict) -> None:
+            messages.append(message)
+
+        await self.app(scope, receive, buffering_send)
+
+        if messages and messages[0].get("status") == 401:
+            redirect = RedirectResponse(url="/login")
+            await redirect(scope, receive, send)
+        else:
+            for message in messages:
+                await send(message)
 
 
 app.add_middleware(RedirectUnauthorizedMiddleware)
