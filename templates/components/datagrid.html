@@ -1,153 +1,163 @@
 <!-- templates/components/datagrid.html -->
 {% if permissions.filter and filter_schema %}
-<!-- Botão para expandir/colapsar filtros -->
-<button class="bg-gray-200 px-4 py-2 rounded mb-2" onclick="toggleFilter()">
-  Filtros
-</button>
-
-<div id="filter-panel" class="hidden border p-4 rounded mb-4">
-  <form method="GET">
-    <!-- Campos de Filtro -->
-    <div class="grid grid-cols-3 gap-4">
-      {% for field in filter_schema %}
-        <div>
-          <label class="block font-medium text-sm mb-1" for="f_{{ field.name }}">{{ field.label }}</label>
-          {% if field.type == "combobox" %}
-            <select name="f_{{ field.name }}" id="f_{{ field.name }}" class="w-full p-2 border rounded">
-              <option value="">-- Todos --</option>
-              {% for opt in field.options %}
-                <option value="{{ opt.value }}" {% if request.query_params.get("f_" + field.name) == (opt.value|string) %}selected{% endif %}>
-                  {{ opt.label }}
-                </option>
-              {% endfor %}
-            </select>
-          {% elif field.type == "date" %}
-            <input type="date" name="f_{{ field.name }}" class="w-full p-2 border rounded"
-                   value="{{ request.query_params.get('f_'+field.name, '') }}">
-          {% else %}
-            <input type="{{ field.type }}" name="f_{{ field.name }}" class="w-full p-2 border rounded"
-                   value="{{ request.query_params.get('f_'+field.name, '') }}">
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-
-    <div class="mt-4 flex space-x-2">
-      <button type="submit" class="bg-yellow-500 text-white px-4 py-2 rounded">
-        Filtrar Resultado
-      </button>
-      <a href="?sort_by={{ sort_by }}&sort_order={{ sort_order }}&page=1&per_page={{ per_page }}"
-         class="bg-gray-300 px-4 py-2 rounded">
-        Limpar Filtros
-      </a>
-    </div>
-  </form>
+<!-- Painel de filtros -->
+<div class="collapse collapse-arrow bg-base-100 border border-base-300 rounded-box mb-4" id="filter-collapse">
+  <input type="checkbox" id="filter-toggle" />
+  <div class="collapse-title font-semibold flex items-center gap-2">
+    <i class="fas fa-filter text-sm"></i> Filtros
+  </div>
+  <div class="collapse-content">
+    <form method="GET" class="pt-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for field in filter_schema %}
+          <div class="form-control">
+            <label class="label pb-1" for="f_{{ field.name }}">
+              <span class="label-text font-medium">{{ field.label }}</span>
+            </label>
+            {% if field.type == "combobox" %}
+              <select name="f_{{ field.name }}" id="f_{{ field.name }}" class="select select-bordered select-sm">
+                <option value="">-- Todos --</option>
+                {% for opt in field.options %}
+                  <option value="{{ opt.value }}" {% if request.query_params.get("f_" + field.name) == (opt.value|string) %}selected{% endif %}>
+                    {{ opt.label }}
+                  </option>
+                {% endfor %}
+              </select>
+            {% elif field.type == "date" %}
+              <input type="date" name="f_{{ field.name }}" class="input input-bordered input-sm"
+                     value="{{ request.query_params.get('f_'+field.name, '') }}">
+            {% else %}
+              <input type="{{ field.type }}" name="f_{{ field.name }}" class="input input-bordered input-sm"
+                     value="{{ request.query_params.get('f_'+field.name, '') }}">
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button type="submit" class="btn btn-warning btn-sm">
+          <i class="fas fa-search"></i> Filtrar
+        </button>
+        <a href="?sort_by={{ sort_by }}&sort_order={{ sort_order }}&page=1&per_page={{ per_page }}"
+           class="btn btn-ghost btn-sm">
+          <i class="fas fa-times"></i> Limpar
+        </a>
+      </div>
+    </form>
+  </div>
 </div>
-
-<script>
-function toggleFilter() {
-  const panel = document.getElementById("filter-panel");
-  panel.classList.toggle("hidden");
-}
-</script>
 {% endif %}
 
-<!-- Botões de Ação -->
-<div class="mb-4 flex justify-between items-center">
+<!-- Barra de ações -->
+<div class="flex justify-between items-center mb-4">
   <h2 class="text-xl font-bold">{{ title }}</h2>
-  <div>
+  <div class="flex gap-2">
     {% if permissions.add %}
-      <button onclick="openModal('add')" class="bg-blue-500 text-white px-4 py-2 rounded">
-        + Adicionar
+      <button onclick="openModal('add')" class="btn btn-primary btn-sm gap-2">
+        <i class="fas fa-plus"></i> Adicionar
       </button>
     {% endif %}
     {% if permissions.upload %}
-      <button onclick="openUploadModal()" class="bg-green-500 text-white px-4 py-2 rounded">📤 Upload</button>
+      <button onclick="openUploadModal()" class="btn btn-success btn-sm gap-2">
+        <i class="fas fa-upload"></i> Upload
+      </button>
     {% endif %}
   </div>
 </div>
 
 <!-- Tabela -->
-<table class="w-full bg-white shadow-md rounded-lg">
-  <thead>
-    <tr class="bg-blue-500 text-white">
-      {% for column in columns %}
-        <th class="p-3 text-left">
-          {% if column.sort %}
-            <a href="?{% for key, val in request.query_params.items() if key not in ['sort_by','sort_order'] %}{{ key }}={{ val }}&{% endfor %}sort_by={{ column.sort_key }}&sort_order={% if sort_by == column.sort_key and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
-              {{ column.label }}
-              {% if sort_by == column.sort_key %}
-                {% if sort_order == 'asc' %}
-                  &uarr;
+<div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+  <table class="table table-zebra table-sm w-full">
+    <thead>
+      <tr class="bg-base-200">
+        {% for column in columns %}
+          <th>
+            {% if column.sort %}
+              <a href="?{% for key, val in request.query_params.items() if key not in ['sort_by','sort_order'] %}{{ key }}={{ val }}&{% endfor %}sort_by={{ column.sort_key }}&sort_order={% if sort_by == column.sort_key and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                {{ column.label }}
+                {% if sort_by == column.sort_key %}
+                  <i class="fas fa-sort-{% if sort_order == 'asc' %}up{% else %}down{% endif %} text-xs text-primary"></i>
                 {% else %}
-                  &darr;
+                  <i class="fas fa-sort text-xs opacity-30"></i>
                 {% endif %}
-              {% endif %}
-            </a>
-          {% else %}
-            {{ column.label }}
-          {% endif %}
-        </th>
-      {% endfor %}
-      <th class="p-3 text-center">Ações</th>
-    </tr>
-  </thead>
-  <tbody class="divide-y">
-    {% for row in values %}
-      <tr>
-        {% for cell in row %}
-          <td class="p-3">
-            {% set column = columns[loop.index0] %}
-            {% if column.type == "currency" %}
-              R$ {{ cell | float | round(2) }}
-            {% elif column.type == "datetime-local" %}
-              {{ cell.strftime('%d/%m/%Y %H:%M') if cell else '' }}
-            {% elif column.type == "date" %}
-              {{ cell.strftime('%d/%m/%Y') if cell else '' }}
-            {% elif column.type == "html" %}
-              {{ cell | safe }}
+              </a>
             {% else %}
-              {{ cell }}
+              {{ column.label }}
             {% endif %}
-          </td>
+          </th>
         {% endfor %}
-        {% if permissions.edit or permissions.delete %}
-          <td class="p-3 text-center">
-            {% if permissions.detail %}
-              <button onclick="openDetailModal('{{ row[0] }}')" class="bg-green-500 text-white px-3 py-1 rounded">Ver Detalhe</button>
-            {% endif %}
-            {% if permissions.edit %}
-              <button onclick="openModal('edit', '{{ row[0] }}')" class="bg-blue-500 text-white px-3 py-1 rounded">Editar</button>
-            {% endif %}
-            {% if permissions.delete %}
-              <button onclick="openModal('delete', '{{ row[0] }}')" class="bg-red-500 text-white px-3 py-1 rounded">Excluir</button>
-            {% endif %}
-          </td>
-        {% endif %}
+        <th class="text-center">Ações</th>
       </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {% for row in values %}
+        <tr class="hover">
+          {% for cell in row %}
+            <td>
+              {% set column = columns[loop.index0] %}
+              {% if column.type == "currency" %}
+                <span class="font-mono">R$ {{ "%.2f"|format(cell|float) }}</span>
+              {% elif column.type == "datetime-local" %}
+                {{ cell.strftime('%d/%m/%Y %H:%M') if cell else '' }}
+              {% elif column.type == "date" %}
+                {{ cell.strftime('%d/%m/%Y') if cell else '' }}
+              {% elif column.type == "html" %}
+                {{ cell | safe }}
+              {% else %}
+                {{ cell }}
+              {% endif %}
+            </td>
+          {% endfor %}
+          {% if permissions.edit or permissions.delete %}
+            <td class="text-center">
+              <div class="flex justify-center gap-1">
+                {% if permissions.detail %}
+                  <button onclick="openDetailModal('{{ row[0] }}')" class="btn btn-success btn-xs gap-1">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                {% endif %}
+                {% if permissions.edit %}
+                  <button onclick="openModal('edit', '{{ row[0] }}')" class="btn btn-info btn-xs gap-1">
+                    <i class="fas fa-pen"></i>
+                  </button>
+                {% endif %}
+                {% if permissions.delete %}
+                  <button onclick="openModal('delete', '{{ row[0] }}')" class="btn btn-error btn-xs gap-1">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                {% endif %}
+              </div>
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <!-- Paginação -->
-<div class="mt-4 flex items-center justify-between">
-  <div>
+<div class="flex items-center justify-between mt-4 flex-wrap gap-2">
+  <div class="text-sm text-base-content/70">
     {% set start_item = (page - 1) * per_page + 1 %}
     {% set end_item = (page - 1) * per_page + values|length %}
-    Mostrando {{ start_item }} até {{ end_item }} de {{ total_count }} registros
+    Mostrando {{ start_item }}–{{ end_item }} de {{ total_count }} registros
   </div>
-  <div class="space-x-2">
+  <div class="join">
     {% if page > 1 %}
-      <a class="bg-gray-300 px-3 py-1 rounded"
+      <a class="join-item btn btn-sm"
          href="?{% for key, val in request.query_params.items() if key not in ['page'] %}{{ key }}={{ val }}&{% endfor %}page={{ page|int - 1 }}">
-        &laquo; Anterior
+        «
       </a>
+    {% else %}
+      <button class="join-item btn btn-sm btn-disabled">«</button>
     {% endif %}
+    <button class="join-item btn btn-sm btn-active">{{ page }}</button>
     {% if end_item < total_count %}
-      <a class="bg-gray-300 px-3 py-1 rounded"
+      <a class="join-item btn btn-sm"
          href="?{% for key, val in request.query_params.items() if key not in ['page'] %}{{ key }}={{ val }}&{% endfor %}page={{ page|int + 1 }}">
-        Próximo &raquo;
+        »
       </a>
+    {% else %}
+      <button class="join-item btn btn-sm btn-disabled">»</button>
     {% endif %}
   </div>
 </div>

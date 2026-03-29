@@ -1,55 +1,57 @@
 <!-- templates/components/sidebar.html -->
-<aside id="sidebar" class="bg-blue-700 text-white min-h-screen w-20 p-5 flex flex-col transition-all duration-300 relative" aria-expanded="false">
-    <!-- Botão de expandir/recolher -->
-    <button id="toggle-sidebar" class="absolute top-1/2 -right-3 transform -translate-y-1/2 bg-blue-500 text-white p-2 rounded-full shadow-md focus:outline-none transition-transform hover:scale-110 border border-white" aria-label="Expandir sidebar">
-        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-    </button>
-
+<aside class="bg-base-300 w-64 min-h-screen flex flex-col">
     <!-- Logo -->
-    <div class="flex items-center justify-center mb-6">
-        <img src="/static/logo.png" alt="Controle Financeiro" class="sidebar-logo cursor-pointer" onclick="location.href='/'">
+    <div class="p-5 flex items-center justify-center border-b border-base-content/10">
+        <img src="/static/logo.png" alt="Controle Financeiro" class="h-10 cursor-pointer" onclick="location.href='/'">
     </div>
 
     <!-- Menu de Navegação -->
-    <nav class="flex-1">
-        <ul class="space-y-6">
+    <nav class="flex-1 overflow-y-auto">
+        <ul class="menu menu-lg p-3 w-full gap-1">
             <li>
-                <a href="/transactions" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
-                    <i class="fas fa-exchange-alt"></i>
-                    <span class="sidebar-text hidden">Transações</span>
+                <a href="/" class="gap-3">
+                    <i class="fas fa-home w-5 text-center"></i>
+                    Dashboard
                 </a>
             </li>
             <li>
-                <a href="/accounts" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
-                    <i class="fas fa-university"></i>
-                    <span class="sidebar-text hidden">Contas</span>
+                <a href="/transactions" class="gap-3">
+                    <i class="fas fa-exchange-alt w-5 text-center"></i>
+                    Transações
                 </a>
             </li>
             <li>
-                <a href="/cards" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
-                    <i class="fas fa-credit-card"></i>
-                    <span class="sidebar-text hidden">Cartões</span>
+                <a href="/accounts" class="gap-3">
+                    <i class="fas fa-university w-5 text-center"></i>
+                    Contas
                 </a>
             </li>
             <li>
-                <a href="/categories" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
-                    <i class="fas fa-folder"></i>
-                    <span class="sidebar-text hidden">Categorias</span>
+                <a href="/cards" class="gap-3">
+                    <i class="fas fa-credit-card w-5 text-center"></i>
+                    Cartões
                 </a>
             </li>
             <li>
-                <a href="/budgets" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
-                    <i class="fas fa-chart-line"></i>
-                    <span class="sidebar-text hidden">Orçamentos</span>
+                <a href="/categories" class="gap-3">
+                    <i class="fas fa-folder w-5 text-center"></i>
+                    Categorias
+                </a>
+            </li>
+            <li>
+                <a href="/budgets" class="gap-3">
+                    <i class="fas fa-chart-line w-5 text-center"></i>
+                    Orçamentos
                 </a>
             </li>
         </ul>
     </nav>
 
-    <div class="mt-auto flex justify-center">
-        <button id="logout-btn" class="flex items-center space-x-3 py-2 px-4 hover:bg-blue-500 rounded transition">
+    <!-- Logout -->
+    <div class="p-3 border-t border-base-content/10">
+        <button id="logout-btn" class="btn btn-ghost btn-block justify-start gap-3">
             <i class="fas fa-sign-out-alt"></i>
-            <span class="sidebar-text hidden">Sair</span>
+            Sair
         </button>
     </div>
 </aside>

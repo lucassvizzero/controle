@@ -1,28 +1,34 @@
 {% extends "base_auth.html" %}
 
 {% block title %}Cadastro{% endblock %}
-{% block heading %}Cadastro{% endblock %}
+{% block heading %}Criar Conta{% endblock %}
 
 {% block content %}
 <form id="register-form" class="space-y-4">
-    <div>
-        <label for="name" class="block text-gray-700 font-medium">Nome</label>
-        <input type="text" id="name" name="name" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    <div class="form-control">
+        <label for="name" class="label pb-1">
+            <span class="label-text font-medium">Nome</span>
+        </label>
+        <input type="text" id="name" name="name" class="input input-bordered" required>
     </div>
-    <div>
-        <label for="email" class="block text-gray-700 font-medium">Email</label>
-        <input type="email" id="email" name="email" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    <div class="form-control">
+        <label for="email" class="label pb-1">
+            <span class="label-text font-medium">Email</span>
+        </label>
+        <input type="email" id="email" name="email" class="input input-bordered" required>
     </div>
-    <div>
-        <label for="password" class="block text-gray-700 font-medium">Senha</label>
-        <input type="password" id="password" name="password" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500" required>
+    <div class="form-control">
+        <label for="password" class="label pb-1">
+            <span class="label-text font-medium">Senha</span>
+        </label>
+        <input type="password" id="password" name="password" class="input input-bordered" required>
     </div>
-    <button type="submit" class="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 font-semibold">Cadastrar</button>
+    <button type="submit" class="btn btn-success btn-block mt-2">Cadastrar</button>
 </form>
 {% endblock %}
 
 {% block footer %}
-Já tem uma conta? <a href="/login" class="text-blue-600 font-semibold hover:underline">Faça login</a>
+Já tem uma conta? <a href="/login" class="link link-primary font-semibold">Faça login</a>
 {% endblock %}
 
 <script>

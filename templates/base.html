@@ -1,44 +1,45 @@
 <!-- templates/base.html -->
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" data-theme="business">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Meu Sistema{% endblock %}</title>
+    <title>{% block title %}Controle Financeiro{% endblock %}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-<body class="bg-gray-100">
-    <div class="flex">
-        {% include 'components/sidebar.html' %}
+<body class="bg-base-200 min-h-screen">
+    <div class="drawer lg:drawer-open">
+        <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
 
-        <div class="flex-1 p-6">
-            <h1 class="text-2xl font-bold mb-4">{% block header %}Dashboard{% endblock %}</h1>
-            {% block content %} {% endblock %} 
+        <!-- Conteúdo principal -->
+        <div class="drawer-content flex flex-col min-h-screen">
+            <!-- Navbar mobile -->
+            <div class="navbar bg-base-300 shadow-sm lg:hidden sticky top-0 z-30">
+                <label for="sidebar-toggle" class="btn btn-ghost drawer-button">
+                    <i class="fas fa-bars text-lg"></i>
+                </label>
+                <span class="text-lg font-bold ml-2">Controle Financeiro</span>
+            </div>
+
+            <!-- Área da página -->
+            <main class="flex-1 p-6">
+                <h1 class="text-2xl font-bold mb-6 text-base-content">{% block header %}Dashboard{% endblock %}</h1>
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="drawer-side z-40">
+            <label for="sidebar-toggle" class="drawer-overlay"></label>
+            {% include 'components/sidebar.html' %}
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Sidebar toggle
-            const sidebar = document.getElementById("sidebar");
-            const toggleSidebar = document.getElementById("toggle-sidebar");
-            const sidebarTexts = document.querySelectorAll(".sidebar-text");
-
-            toggleSidebar.addEventListener("click", () => {
-                const isExpanded = sidebar.classList.contains("w-64");
-
-                sidebar.classList.toggle("w-20", isExpanded);
-                sidebar.classList.toggle("w-64", !isExpanded);
-
-                sidebar.setAttribute('aria-expanded', (!isExpanded).toString());
-                sidebarTexts.forEach(text => text.classList.toggle("hidden", isExpanded));
-                toggleSidebar.classList.toggle("rotate-180");
-                toggleSidebar.setAttribute('aria-label', !isExpanded ? 'Recolher sidebar' : 'Expandir sidebar');
-            });
-
-            // Logout
             document.getElementById("logout-btn").addEventListener("click", async () => {
                 try {
                     await fetch("/logout", { method: "POST", credentials: "include" });

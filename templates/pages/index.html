@@ -1,439 +1,439 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard{% endblock %}
-
 {% block header %}{{ month_name }}{% endblock %}
 
 {% block content %}
   {% include "components/alerts.html" %}
   {% include "components/crud_modal.html" %}
+
   <style>
-    /* Estilização do switch */
-    .relative.w-10 {
-        transition: background-color 0.3s ease-in-out;
+    .relative.w-11.active { background-color: oklch(var(--su)); }
+    .absolute.move { transform: translateX(125%); }
+  </style>
+  <script>
+    function toggleSwitch(name) {
+      const checkbox = document.getElementById(name);
+      checkbox.checked = !checkbox.checked;
+      checkbox.value = checkbox.checked;
+      toggleSwitchUI(name, checkbox.checked);
+      const url = new URL(window.location.href);
+      url.searchParams.set(name, checkbox.checked ? "true" : "false");
+      window.location.href = `${url.pathname}?${url.searchParams.toString()}`;
     }
-    .relative.w-10.active {
-        background-color: #4CAF50;
+    function toggleSwitchUI(name, isChecked) {
+      const switchBg = document.getElementById(name).nextElementSibling;
+      const toggle = document.getElementById(name + "-toggle");
+      if (isChecked) { switchBg.classList.add("active"); toggle.classList.add("move"); }
+      else { switchBg.classList.remove("active"); toggle.classList.remove("move"); }
     }
-    .absolute {
-        transition: transform 0.3s ease-in-out;
-    }
-    .absolute.move {
-        transform: translateX(100%);
-    }
-    </style>
-    <script>
-      function toggleSwitch(name) {
-        const checkbox = document.getElementById(name);
-        checkbox.checked = !checkbox.checked;
-        checkbox.value = checkbox.checked;
-
-        toggleSwitchUI(name, checkbox.checked);
-
-        // Atualiza os queryParams da URL
-        const url = new URL(window.location.href);
-        const params = url.searchParams;
-
-        // Atualiza o parâmetro "preview"
-        params.set(name, checkbox.checked ? "true" : "false");
-
-        // Redireciona com os novos parâmetros
-        window.location.href = `${url.pathname}?${params.toString()}`;
-      }
-
-      // Atualiza a UI do switch
-      function toggleSwitchUI(name, isChecked) {
-          const switchBg = document.getElementById(name).nextElementSibling;
-          const toggle = document.getElementById(name + "-toggle");
-
-          if (isChecked) {
-              switchBg.classList.add("active");
-              toggle.classList.add("move");
-          } else {
-              switchBg.classList.remove("active");
-              toggle.classList.remove("move");
-          }
-      }
-      
     window.addEventListener("DOMContentLoaded", function () {
-        const previewInput = document.getElementById("preview");
-        toggleSwitchUI("preview", previewInput.checked);
+      toggleSwitchUI("preview", document.getElementById("preview").checked);
     });
-    </script>
-  <!-- Switches para ativar e desativar Previsão -->
-  <div class="flex items-center justify-center space-x-4 mb-4">
-    <form id="form-preview" method="GET">
-      <input type="switch" name="preview" id="preview" class="hidden" value="{{ request.query_params.get('preview') }}" {% if request.query_params.get("preview") == "true" %}checked{% endif %}>
-      <div class="relative w-10 h-5 bg-gray-300 rounded-full cursor-pointer" onclick="toggleSwitch('preview')">
-          <div id="preview-toggle" class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform"></div>
+  </script>
+
+  <!-- Controles: Preview + Navegação de mês -->
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <!-- Preview switch -->
+    <div class="flex items-center gap-3">
+      <input type="switch" name="preview" id="preview" class="hidden"
+             value="{{ request.query_params.get('preview') }}"
+             {% if request.query_params.get("preview") == "true" %}checked{% endif %}>
+      <div class="relative w-11 h-6 bg-base-300 rounded-full cursor-pointer transition-colors duration-200"
+           onclick="toggleSwitch('preview')">
+        <div id="preview-toggle" class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"></div>
       </div>
-    </form>
-    <span>Preview</span>
-  </div>
+      <span class="text-sm font-medium">Preview</span>
+    </div>
 
-  <!-- Navegação de Meses -->
-  <div class="flex items-center justify-center mb-4 space-x-4">
-    <a href="/?year={{ prev_year }}&month={{ prev_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="bg-gray-300 px-3 py-1 rounded">&laquo; Mês Anterior</a>
-    <h2 class="text-xl font-semibold">
-      {{ month_name }}
-      <span class="text-sm text-gray-500">
-        ({{ start_date|strftime('%d/%m/%Y') }} a {{ end_date|strftime('%d/%m/%Y') }})
-      </span>
-    </h2>
-    <a href="/?year={{ next_year }}&month={{ next_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="bg-gray-300 px-3 py-1 rounded">Próximo Mês &raquo;</a>
-  </div>
-
-  <!-- Resumos -->
-  <div class="grid grid-cols-4 gap-4 mb-6">
-    <div class="bg-green-100 p-4 rounded shadow">
-      <p class="text-gray-500">Entrou</p>
-      <p class="text-2xl text-green-600">R$ {{ entrou|float|round(2) }}</p>
-    </div>
-    <div class="bg-red-100 p-4 rounded shadow">
-      <p class="text-gray-500">Saiu</p>
-      <p class="text-2xl text-red-600">R$ {{ saiu|float|round(2) }}</p>
-    </div>
-    <div class="bg-yellow-100 p-4 rounded shadow">
-      <p class="text-gray-500">Investiu</p>
-      <p class="text-2xl text-yellow-600">R$ {{ investiu|float|round(2) }}</p>
-    </div>
-    <div class="bg-blue-100 p-4 rounded shadow">
-      <p class="text-gray-500">Sobrou</p>
-      <p class="text-2xl text-blue-600">R$ {{ sobrou|float|round(2) }}</p>
+    <!-- Navegação de mês -->
+    <div class="join">
+      <a href="/?year={{ prev_year }}&month={{ prev_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}"
+         class="join-item btn btn-sm btn-ghost">«</a>
+      <button class="join-item btn btn-sm btn-ghost pointer-events-none">
+        {{ month_name }}
+        <span class="text-xs text-base-content/50 ml-1">
+          ({{ start_date|strftime('%d/%m/%Y') }} – {{ end_date|strftime('%d/%m/%Y') }})
+        </span>
+      </button>
+      <a href="/?year={{ next_year }}&month={{ next_month }}&paid_page={{ paid_page }}&pending_page={{ pending_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}"
+         class="join-item btn btn-sm btn-ghost">»</a>
     </div>
   </div>
 
-   <!-- Orçamentos -->
-   <h3 class="text-lg font-bold mb-2">Orçamentos do Período</h3>
-   <div class="grid grid-cols-3 gap-4 mb-6">
-     {% for parent in budgets_parent_info %}
-       <div class="bg-white p-4 shadow rounded relative">
-         <div class="flex items-center justify-between">
-           <div class="flex items-center space-x-2">
-             {% if parent.root_icon %}
-               <i class="{{ parent.root_icon }} text-xl" style="color: {{ parent.root_color or '#000' }}"></i>
-             {% endif %}
-             <span class="text-lg font-semibold">{{ parent.root_name }}</span>
-           </div>
-           <button class="text-blue-500 text-sm underline" onclick="openBudgetDetail({{ parent.root_id }})">Detalhes</button>
-         </div>
-         {% if parent.total_limit|float > 0 %}
-            <p class="text-sm text-gray-500 mt-1">R$ {{ parent.total_spent|float|round(2) }} / R$ {{ parent.total_limit|float|round(2) }}</p>
-          {% else %}
-            <p class="text-sm text-gray-500 mt-1">R$ {{ parent.total_cat|float|round(2) }} / -</p>
-          {% endif %}
-         <!-- Barra de progresso -->
-         <div class="w-full bg-gray-200 rounded h-4 mt-2 relative">
-           {% set bar_width = parent.progress if parent.progress < 100 else 100 %}
-           <div class="h-4 rounded" style="width: {{ bar_width }}%; background-color: {{ progress_color(parent.progress) }}"></div>
-         </div>
-         <p class="text-sm text-gray-600 mt-1">{{ parent.progress }}%</p>
-       </div>
-     {% else %}
-       <p class="text-center text-gray-500 col-span-3">Nenhum orçamento encontrado</p>
-     {% endfor %}
-   </div>
- 
-   <!-- Modal de Detalhes -->
-   <div id="budget-detail-modal"
-     class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
-     style="z-index: 9999;"
-     onclick="closeBudgetDetail(event)">
-    <div id="modal-content"
-        class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative overflow-y-auto max-h-[80vh]"
-        onclick="event.stopPropagation()">
-        <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg" onclick="closeBudgetDetail()">✖</button>
-        <h2 id="detail-modal-title" class="text-xl font-bold mb-4 text-center">Detalhes</h2>
-        <div id="detail-modal-content" class="space-y-2">
-        <!-- Os detalhes dos orçamentos serão carregados aqui -->
+  <!-- Cards de resumo -->
+  <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
+    <div class="stat">
+      <div class="stat-figure text-success">
+        <i class="fas fa-arrow-down text-3xl"></i>
+      </div>
+      <div class="stat-title">Entrou</div>
+      <div class="stat-value text-success text-2xl">R$ {{ "%.2f"|format(entrou|float) }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-figure text-error">
+        <i class="fas fa-arrow-up text-3xl"></i>
+      </div>
+      <div class="stat-title">Saiu</div>
+      <div class="stat-value text-error text-2xl">R$ {{ "%.2f"|format(saiu|float) }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-figure text-warning">
+        <i class="fas fa-chart-line text-3xl"></i>
+      </div>
+      <div class="stat-title">Investiu</div>
+      <div class="stat-value text-warning text-2xl">R$ {{ "%.2f"|format(investiu|float) }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-figure text-info">
+        <i class="fas fa-piggy-bank text-3xl"></i>
+      </div>
+      <div class="stat-title">Sobrou</div>
+      <div class="stat-value text-info text-2xl">R$ {{ "%.2f"|format(sobrou|float) }}</div>
+    </div>
+  </div>
+
+  <!-- Orçamentos -->
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-lg font-bold">Orçamentos do Período</h3>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+    {% for parent in budgets_parent_info %}
+      <div class="card bg-base-100 shadow-sm border border-base-300">
+        <div class="card-body p-4 gap-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              {% if parent.root_icon %}
+                <i class="{{ parent.root_icon }} text-xl" style="color: {{ parent.root_color or '#888' }}"></i>
+              {% endif %}
+              <span class="font-semibold">{{ parent.root_name }}</span>
+            </div>
+            <button class="btn btn-ghost btn-xs text-info" onclick="openBudgetDetail({{ parent.root_id }})">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+          <div class="text-sm text-base-content/60">
+            {% if parent.total_limit|float > 0 %}
+              R$ {{ "%.2f"|format(parent.total_spent|float) }} / R$ {{ "%.2f"|format(parent.total_limit|float) }}
+            {% else %}
+              R$ {{ "%.2f"|format(parent.total_cat|float) }} / —
+            {% endif %}
+          </div>
+          {% set bar_width = parent.progress if parent.progress < 100 else 100 %}
+          <progress class="progress w-full h-3"
+                    value="{{ bar_width }}" max="100"
+                    style="--progress-color: {{ progress_color(parent.progress) }};
+                           accent-color: {{ progress_color(parent.progress) }}">
+          </progress>
+          <span class="text-xs text-base-content/50">{{ parent.progress }}%</span>
         </div>
-    </div>
-    </div>
+      </div>
+    {% else %}
+      <p class="text-base-content/50 col-span-3 text-center py-4">Nenhum orçamento encontrado</p>
+    {% endfor %}
+  </div>
 
-  <!-- Transações: Paginação e Botão "Marcar como Paga" -->
-  <div class="grid grid-cols-2 gap-6">
-   
+  <!-- Modal de detalhes de orçamento -->
+  <div id="budget-detail-modal"
+       class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+       onclick="closeBudgetDetail(event)">
+    <div id="modal-content"
+         class="modal-box w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-2xl"
+         onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closeBudgetDetail()">✕</button>
+      <h2 id="detail-modal-title" class="text-xl font-bold mb-5">Detalhes</h2>
+      <div id="detail-modal-content" class="space-y-3"></div>
+    </div>
+  </div>
+
+  <!-- Transações lado a lado -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
     <!-- Transações Efetuadas -->
     <div>
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-lg font-bold">Transações Efetuadas</h3>
-          {% if permissions.add %}
-            <button onclick="openModal('add', null, window.location.href)" class="bg-blue-500 text-white px-4 py-2 rounded">
-              + Adicionar
-            </button>
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold">Transações Efetuadas</h3>
+        {% if permissions.add %}
+          <button onclick="openModal('add', null, window.location.href)" class="btn btn-primary btn-sm gap-2">
+            <i class="fas fa-plus"></i> Adicionar
+          </button>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table table-sm w-full">
+          <thead>
+            <tr class="bg-base-200">
+              <th>Categoria</th>
+              <th>Descrição</th>
+              <th>Data</th>
+              <th class="text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacoes_efetuadas %}
+              {% if t.category_type == "expense" %}
+                {% set row_class = "border-l-2 border-error" %}
+              {% elif t.category_type == "transfer" %}
+                {% set row_class = "border-l-2 border-base-300" %}
+              {% else %}
+                {% set row_class = "border-l-2 border-success" %}
+              {% endif %}
+              <tr class="hover {{ row_class }}">
+                {% if t.is_card_invoice %}
+                  <td>
+                    <div class="flex items-center gap-1">
+                      <i class="{{ t.category_icon }}" style="color:{{ t.category_color }}"></i>
+                      <span>{{ t.category_name }}</span>
+                      <button onclick='openInvoiceDetail({{ t.transactions | tojson }})' class="btn btn-ghost btn-xs ml-1">
+                        <i class="fas fa-eye text-xs"></i>
+                      </button>
+                    </div>
+                  </td>
+                {% else %}
+                  <td>
+                    <div class="flex items-center gap-1">
+                      <i class="{{ t.category_icon }}" style="color:{{ t.category_color }}"></i>
+                      <span>{{ t.category_name }}</span>
+                    </div>
+                  </td>
+                {% endif %}
+                <td class="text-base-content/70">{{ t.description }}</td>
+                <td class="text-xs text-base-content/50">{{ t.paid_at|strftime('%d/%m/%Y') }}</td>
+                <td class="text-right font-mono {% if t.category_type == 'expense' %}text-error{% else %}text-success{% endif %}">
+                  R$ {{ "%.2f"|format(t.value|float) }}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4" class="text-center text-base-content/40 py-6">Nenhuma transação efetuada</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <!-- Paginação -->
+      <div class="flex justify-between items-center mt-3 text-sm">
+        <span class="text-base-content/50">
+          Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }} ({{ total_paid }} registros)
+        </span>
+        <div class="join">
+          {% if paid_page > 1 %}
+            <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="join-item btn btn-xs">«</a>
+          {% else %}
+            <button class="join-item btn btn-xs btn-disabled">«</button>
+          {% endif %}
+          {% if total_paid > paid_page * paid_per_page %}
+            <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="join-item btn btn-xs">»</a>
+          {% else %}
+            <button class="join-item btn btn-xs btn-disabled">»</button>
           {% endif %}
         </div>
-      <table class="min-w-full border">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="p-2 border">Categoria</th>
-            <th class="p-2 border">Descrição</th>
-            <th class="p-2 border">Data</th>
-            <th class="p-2 border text-right">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for t in transacoes_efetuadas %}
-            {% if t.category_type == "expense" %}
-              {% set row_class = "bg-red-100" %}
-            {% elif t.category_type == "transfer" %}
-              {% set row_class = "bg-gray-100" %}
-            {% else %}
-              {% set row_class = "bg-green-100" %}
-            {% endif %}
-            <tr class="{{ row_class }}">
-              {% if t.is_card_invoice %}
-                  <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}} <button onclick='openInvoiceDetail({{ t.transactions | tojson }})'
-                    class="px-3 py-1 rounded text-sm opacity-100 hover:opacity-100 transition">
-                    <i class="fa-solid fa-eye"></i>
-                </button></td>
-              {% else %}
-                  <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
-              {% endif %}
-              
-              <td class="p-2 border">{{ t.description }}</td>
-              <td class="p-2 border">{{ t.paid_at|strftime('%d/%m/%Y') }}</td>
-              <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="3" class="p-2 border text-center text-gray-500">Nenhuma transação efetuada</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <!-- Paginação para transações efetuadas -->
-      <div class="flex justify-between mt-2">
-        {% if paid_page > 1 %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page - 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
-          " class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
-        {% endif %}
-        <span>Página {{ paid_page }} de {{ (total_paid // paid_per_page) + (1 if total_paid % paid_per_page > 0 else 0) }} ({{ total_paid }} registros)</span>
-        {% if total_paid > paid_page * paid_per_page %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page + 1 }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
-          " class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
-        {% endif %}
       </div>
     </div>
 
     <!-- Transações Pendentes -->
     <div>
-      <h3 class="text-lg font-bold mb-2">Transações Pendentes</h3>
-      <table class="min-w-full border">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="p-2 border">Categoria</th>
-            <th class="p-2 border">Descrição</th>
-            <th class="p-2 border">Vencimento</th>
-            <th class="p-2 border text-right">Valor</th>
-            <th class="p-2 border">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for t in transacoes_pendentes %}
-            {% if t.due_at == current_date %}
-              {% set row_class = "bg-orange-100" %}
-            {% elif t.due_at < current_date %}
-              {% set row_class = "bg-orange-300" %}
-            {% else %}
-              {% set row_class = "" %}
-            {% endif %}
-            <tr class="{{ row_class }}">
-                <td class="p-2 border"> <i class='{{t.category_icon}} text-xl' style='color:{{t.category_color}}'></i> {{t.category_name}}</td>
-              <td class="p-2 border">{{ t.description }}</td>
-              <td class="p-2 border">{{ t.due_at|strftime('%d/%m/%Y') }}</td>
-              <td class="p-2 border text-right">R$ {{ t.value|float|round(2) }}</td>
-              <td class="p-2 border text-center">
-                <div class="flex flex-col items-center space-y-1">
+      <h3 class="text-lg font-bold mb-3">Transações Pendentes</h3>
+      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table table-sm w-full">
+          <thead>
+            <tr class="bg-base-200">
+              <th>Categoria</th>
+              <th>Descrição</th>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacoes_pendentes %}
+              {% if t.due_at == current_date %}
+                {% set row_class = "border-l-2 border-warning" %}
+              {% elif t.due_at < current_date %}
+                {% set row_class = "border-l-2 border-error bg-error/5" %}
+              {% else %}
+                {% set row_class = "" %}
+              {% endif %}
+              <tr class="hover {{ row_class }}">
+                <td>
+                  <div class="flex items-center gap-1">
+                    <i class="{{ t.category_icon }}" style="color:{{ t.category_color }}"></i>
+                    <span>{{ t.category_name }}</span>
+                  </div>
+                </td>
+                <td class="text-base-content/70">{{ t.description }}</td>
+                <td class="text-xs {% if t.due_at < current_date %}text-error font-semibold{% else %}text-base-content/50{% endif %}">
+                  {{ t.due_at|strftime('%d/%m/%Y') }}
+                </td>
+                <td class="text-right font-mono">R$ {{ "%.2f"|format(t.value|float) }}</td>
+                <td>
+                  <div class="flex flex-col gap-1">
                     {% if t.is_card_invoice %}
-                          {% if t.close_at <= current_date %}
-                            <button onclick="openPaymentModal('{{ t.transactions | map(attribute='id') | join(',') }}', '{{ t.description }}', '{{ t.value }}')"
-                                class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
-                                💳 Pagar
-                            </button>
-                          {% endif %}
-    
-                        <button onclick='openInvoiceDetail({{ t.transactions | tojson }})'
-                        class="px-3 py-1 rounded text-sm opacity-100 hover:opacity-100 transition">
-                        <i class="fa-solid fa-eye"></i>
+                      {% if t.close_at <= current_date %}
+                        <button onclick="openPaymentModal('{{ t.transactions | map(attribute='id') | join(',') }}', '{{ t.description }}', '{{ t.value }}')"
+                                class="btn btn-primary btn-xs gap-1">
+                          <i class="fas fa-credit-card text-xs"></i> Pagar
                         </button>
-                        
+                      {% endif %}
+                      <button onclick='openInvoiceDetail({{ t.transactions | tojson }})' class="btn btn-ghost btn-xs">
+                        <i class="fas fa-eye text-xs"></i>
+                      </button>
                     {% else %}
-                        <button onclick="openPaymentModal('{{ t.id }}','{{ t.description }}','{{ t.value }}')"
-                            class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
-                            💰 Pagar
+                      <button onclick="openPaymentModal('{{ t.id }}','{{ t.description }}','{{ t.value }}')"
+                              class="btn btn-primary btn-xs gap-1">
+                        <i class="fas fa-coins text-xs"></i> Pagar
+                      </button>
+                      {% if permissions.edit %}
+                        <button onclick="openModal('edit', '{{ t.id }}', window.location.href)" class="btn btn-info btn-xs gap-1">
+                          <i class="fas fa-pen text-xs"></i>
                         </button>
-                        {% if permissions.edit %}
-                          <button onclick="openModal('edit', '{{ t.id }}', window.location.href)" class="bg-blue-500 text-white px-3 py-1 rounded">Editar</button>
-                        {% endif %}
+                      {% endif %}
                     {% endif %}
-                    
-                </div>
-            </td>
-            </tr>
+                  </div>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="text-center text-base-content/40 py-6">Nenhuma transação pendente</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <!-- Paginação -->
+      <div class="flex justify-between items-center mt-3 text-sm">
+        <span class="text-base-content/50">
+          Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }} ({{ total_pending }} registros)
+        </span>
+        <div class="join">
+          {% if pending_page > 1 %}
+            <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="join-item btn btn-xs">«</a>
           {% else %}
-            <tr>
-              <td colspan="4" class="p-2 border text-center text-gray-500">Nenhuma transação pendente</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <!-- Paginação para transações pendentes -->
-      <div class="flex justify-between mt-2">
-        {% if pending_page > 1 %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page - 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
-          " class="bg-gray-300 px-2 py-1 rounded">Anterior</a>
-        {% endif %}
-        <span>Página {{ pending_page }} de {{ (total_pending // pending_per_page) + (1 if total_pending % pending_per_page > 0 else 0) }}  ({{ total_pending }} registros)</span>
-        {% if total_pending > pending_page * pending_per_page %}
-          <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}
-          " class="bg-gray-300 px-2 py-1 rounded">Próxima</a>
-        {% endif %}
+            <button class="join-item btn btn-xs btn-disabled">«</button>
+          {% endif %}
+          {% if total_pending > pending_page * pending_per_page %}
+            <a href="/?year={{ year }}&month={{ month }}&paid_page={{ paid_page }}&paid_per_page={{ paid_per_page }}&pending_page={{ pending_page + 1 }}&pending_per_page={{ pending_per_page }}{% if request.query_params.get('preview') %}&preview={{ request.query_params.get('preview') }}{% endif %}" class="join-item btn btn-xs">»</a>
+          {% else %}
+            <button class="join-item btn btn-xs btn-disabled">»</button>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
-  
 
-  <!-- Modal para pagamento de transações -->
+  <!-- Modal de pagamento -->
   <div id="payment-modal"
-      class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
-      style="z-index: 9999;"
-      onclick="closePaymentModal(event)">
-      <div id="payment-modal-content"
-          class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative overflow-y-auto max-h-[80vh]"
-          onclick="event.stopPropagation()">
-          <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg"
-                  onclick="closePaymentModal()">✖
+       class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+       onclick="closePaymentModal(event)">
+    <div class="modal-box w-full max-w-md shadow-2xl" onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closePaymentModal()">✕</button>
+      <h2 class="text-xl font-bold mb-5">Confirmar Pagamento</h2>
+      <form id="payment-form" class="space-y-4">
+        <input type="hidden" id="transaction-id">
+        <div class="form-control">
+          <label for="payment-description" class="label pb-1">
+            <span class="label-text font-medium">Descrição</span>
+          </label>
+          <input type="text" id="payment-description" class="input input-bordered" required>
+        </div>
+        <div class="form-control">
+          <label for="payment-date" class="label pb-1">
+            <span class="label-text font-medium">Data de Pagamento</span>
+          </label>
+          <input type="datetime-local" id="payment-date" class="input input-bordered" required>
+        </div>
+        <div class="form-control">
+          <label for="payment-value" class="label pb-1">
+            <span class="label-text font-medium">Valor</span>
+          </label>
+          <input type="number" id="payment-value" step="0.01" class="input input-bordered" required>
+        </div>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-primary gap-2">
+            <i class="fas fa-coins"></i> Confirmar
           </button>
-          <h2 class="text-xl font-bold mb-4 text-center">Confirmar Pagamento</h2>
-          <form id="payment-form" class="space-y-3">
-              <input type="hidden" id="transaction-id">
-
-              <div>
-                  <label for="payment-description" class="block text-gray-700 font-semibold">Descrição:</label>
-                  <input type="text" id="payment-description"
-                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
-              </div>
-
-              <div>
-                  <label for="payment-date" class="block text-gray-700 font-semibold">Data de Pagamento:</label>
-                  <input type="datetime-local" id="payment-date"
-                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
-              </div>
-
-              <div>
-                  <label for="payment-value" class="block text-gray-700 font-semibold">Valor:</label>
-                  <input type="number" id="payment-value" step="0.01"
-                        class="w-full p-2 border rounded focus:ring focus:ring-blue-300" required>
-              </div>
-
-              <div class="flex justify-end space-x-2 mt-4">
-                  <button type="button" onclick="closePaymentModal()"
-                          class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">
-                      Cancelar
-                  </button>
-                  <button type="submit"
-                          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">
-                      Confirmar 💰
-                  </button>
-              </div>
-          </form>
-      </div>
+          <button type="button" onclick="closePaymentModal()" class="btn btn-ghost">Cancelar</button>
+        </div>
+      </form>
+    </div>
   </div>
-  
+
+  <!-- Modal de fatura de cartão -->
   <div id="invoice-detail-modal"
-      class="fixed inset-0 hidden flex items-center justify-center bg-black bg-opacity-50 p-4"
-      style="z-index: 9999;"
-      onclick="closeInvoiceDetail(event)">
-      <div id="invoice-modal-content"
-          class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative overflow-y-auto max-h-[80vh]"
-          onclick="event.stopPropagation()">
-          <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg" onclick="closeInvoiceDetail()">✖</button>
-          <h2 id="invoice-modal-title" class="text-xl font-bold mb-4 text-center">Detalhes da Fatura</h2>
-          <table class="min-w-full border">
-              <thead class="bg-gray-200">
-                  <tr>
-                      <th class="p-2 border">Descrição</th>
-                      <th class="p-2 border">Vencimento</th>
-                      <th class="p-2 border text-right">Valor</th>
-                  </tr>
-              </thead>
-              <tbody id="invoice-modal-content-body">
-                  <!-- Transações da fatura serão carregadas aqui -->
-              </tbody>
-          </table>
+       class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+       onclick="closeInvoiceDetail(event)">
+    <div class="modal-box w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closeInvoiceDetail()">✕</button>
+      <h2 id="invoice-modal-title" class="text-xl font-bold mb-5">Detalhes da Fatura</h2>
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm w-full">
+          <thead>
+            <tr class="bg-base-200">
+              <th>Descrição</th>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-modal-content-body"></tbody>
+        </table>
       </div>
+    </div>
   </div>
+
   <script>
-        function openPaymentModal(transactionId, description, value) {
-        document.getElementById("transaction-id").value = transactionId;
-        document.getElementById("payment-description").value = description;
-        const now = new Date();
-        const pad = n => String(n).padStart(2, "0");
-        document.getElementById("payment-date").value =
-          `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        document.getElementById("payment-value").value = value;
-        document.getElementById("payment-modal").classList.remove("hidden");
+    function openPaymentModal(transactionId, description, value) {
+      document.getElementById("transaction-id").value = transactionId;
+      document.getElementById("payment-description").value = description;
+      const now = new Date();
+      const pad = n => String(n).padStart(2, "0");
+      document.getElementById("payment-date").value =
+        `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      document.getElementById("payment-value").value = value;
+      document.getElementById("payment-modal").classList.remove("hidden");
     }
 
     function closePaymentModal() {
-        document.getElementById("payment-modal").classList.add("hidden");
+      document.getElementById("payment-modal").classList.add("hidden");
     }
 
-    document.getElementById("payment-form").addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const transactionId = document.getElementById("transaction-id").value;
-        const description = document.getElementById("payment-description").value;
-        const paymentDate = document.getElementById("payment-date").value;
-        const value = parseFloat(document.getElementById("payment-value").value);
-
-        const response = await fetch(`/registry_payment`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({description, payment_date: paymentDate, value, transaction_id: transactionId})
-        });
-
-        if (response.redirected) {
-          // Redireciona para a página de transações após o upload bem-sucedido
-          window.location.href = response.url;
-        } else if (response.ok) {
-          // Fecha o modal e recarrega a página se o servidor não redirecionar
-          closeUploadModal();
-          window.location.reload();
-        } else {
-            alert("Erro ao processar pagamento.");
-        }
+    document.getElementById("payment-form").addEventListener("submit", async function(event) {
+      event.preventDefault();
+      const transactionId = document.getElementById("transaction-id").value;
+      const description = document.getElementById("payment-description").value;
+      const paymentDate = document.getElementById("payment-date").value;
+      const value = parseFloat(document.getElementById("payment-value").value);
+      const response = await fetch(`/registry_payment`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({description, payment_date: paymentDate, value, transaction_id: transactionId})
+      });
+      if (response.redirected) { window.location.href = response.url; }
+      else if (response.ok) { closePaymentModal(); window.location.reload(); }
+      else { alert("Erro ao processar pagamento."); }
     });
 
-function openInvoiceDetail(transactions) {
-        if (!transactions || transactions.length === 0) {
-            alert("Nenhuma transação encontrada.");
-            return;
-        }
-
-        const modal = document.getElementById("invoice-detail-modal");
-        const contentBody = document.getElementById("invoice-modal-content-body");
-
-        contentBody.innerHTML = "";  // Limpa o conteúdo anterior
-
-        transactions.forEach(t => {
-            contentBody.innerHTML += `
-                <tr>
-                    <td class="p-2 border">${t.description}</td>
-                    <td class="p-2 border">${new Date(t.due_at).toLocaleDateString('pt-BR')}</td>
-                    <td class="p-2 border text-right ${t.category_type == 'income' ? 'bg-green-50' : ''}">${t.category_type == 'expense' ? 'R$' : '- R$'} ${t.value.toFixed(2)}</td>
-                </tr>
-            `;
-        });
-
-        modal.classList.remove("hidden");
+    function openInvoiceDetail(transactions) {
+      if (!transactions || transactions.length === 0) { alert("Nenhuma transação encontrada."); return; }
+      const modal = document.getElementById("invoice-detail-modal");
+      const contentBody = document.getElementById("invoice-modal-content-body");
+      contentBody.innerHTML = "";
+      transactions.forEach(t => {
+        contentBody.innerHTML += `
+          <tr class="hover">
+            <td>${t.description}</td>
+            <td class="text-xs text-base-content/50">${new Date(t.due_at).toLocaleDateString('pt-BR')}</td>
+            <td class="text-right font-mono ${t.category_type == 'income' ? 'text-success' : 'text-error'}">
+              ${t.category_type == 'expense' ? 'R$' : '- R$'} ${t.value.toFixed(2)}
+            </td>
+          </tr>`;
+      });
+      modal.classList.remove("hidden");
     }
 
     function closeInvoiceDetail() {
-        document.getElementById("invoice-detail-modal").classList.add("hidden");
+      document.getElementById("invoice-detail-modal").classList.add("hidden");
     }
 
-    // Objeto em JS com todos os budgets detalhados
     const budgetsParentInfo = {{ budgets_parent_info | tojson }};
 
     function openBudgetDetail(rootId) {
@@ -443,73 +443,66 @@ function openInvoiceDetail(transactions) {
 
       const parentObj = budgetsParentInfo.find(p => p.root_id === rootId);
       if (!parentObj) {
-        content.innerHTML = "<p class='text-red-500'>Nenhum detalhe encontrado.</p>";
+        content.innerHTML = "<p class='text-error'>Nenhum detalhe encontrado.</p>";
         modal.classList.remove("hidden");
         return;
       }
 
-      const title = document.getElementById("detail-modal-title");
-      title.textContent = `Detalhes: ${parentObj.root_name}`;
+      document.getElementById("detail-modal-title").textContent = `Detalhes: ${parentObj.root_name}`;
 
       parentObj.items.forEach(item => {
         const itemLimit = item.limit_value.toFixed(2);
         const itemSpent = item.spent_value.toFixed(2);
-        let itemProgress = itemLimit > 0 ? ((itemSpent / itemLimit) * 100).toFixed(1) : 0;
+        let itemProgress = itemLimit > 0 ? ((item.spent_value / item.limit_value) * 100).toFixed(1) : 0;
         const barColor = progressColor(itemProgress);
 
         content.innerHTML += `
-        <details class="border p-2 rounded mb-2">
-          <summary class="flex items-center justify-between cursor-pointer">
-            <div class="flex items-center space-x-2">
-              <i class="${item.cat_icon || 'fas fa-folder'} text-xl" style="color:${item.cat_color || '#999'}"></i>
-              <span class="font-bold">${item.cat_name}</span>
+        <details class="collapse collapse-arrow bg-base-200 border border-base-300 rounded-box">
+          <summary class="collapse-title font-semibold">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="${item.cat_icon || 'fas fa-folder'} text-lg" style="color:${item.cat_color || '#888'}"></i>
+                <span>${item.cat_name}</span>
+              </div>
+              <span class="text-sm text-base-content/50">R$ ${itemSpent} / ${itemLimit > 0 ? "R$ " + itemLimit : "—"}</span>
             </div>
-            <span class="text-sm text-gray-500">R$ ${itemSpent} / ${itemLimit > 0 ? "R$ " + itemLimit : "-"}</span>
           </summary>
-          <div class="mt-2">
-            <div class="w-full bg-gray-200 rounded h-3 mb-1">
-              <div class="h-3 rounded" style="width:${Math.min(itemProgress,100)}%; background-color:${barColor};"></div>
-            </div>
-            <small class="text-gray-600">${itemProgress}%</small>
-
-            <ul class="mt-2 text-sm text-gray-700 space-y-1">
+          <div class="collapse-content pt-2">
+            <progress class="progress w-full h-2 mb-1" value="${Math.min(itemProgress,100)}" max="100"
+                      style="accent-color:${barColor}"></progress>
+            <small class="text-base-content/50">${itemProgress}%</small>
+            <ul class="mt-3 space-y-1">
               ${(item.transactions || []).map(t => `
-                <li class="flex justify-between border-b py-1">
+                <li class="flex justify-between border-b border-base-300 py-1 text-sm">
                   <span>${t.description}</span>
-                  <span>R$ ${t.value.toFixed(2)} <small class="text-gray-500">(${t.paid_at})</small></span>
-                </li>
-              `).join('')}
+                  <span class="font-mono">R$ ${t.value.toFixed(2)} <small class="text-base-content/40">(${t.paid_at})</small></span>
+                </li>`).join('')}
             </ul>
           </div>
-        </details>
-      `;
-
+        </details>`;
       });
 
       modal.classList.remove("hidden");
     }
 
     function closeBudgetDetail() {
-      const modal = document.getElementById("budget-detail-modal");
-      modal.classList.add("hidden");
+      document.getElementById("budget-detail-modal").classList.add("hidden");
     }
 
     function progressColor(progress) {
       if (progress <= 100) {
         const ratio = progress / 100;
-        const r = Math.round((1 - ratio) * 173 + ratio * 0);
-        const g = Math.round((1 - ratio) * 216 + ratio * 255);
-        const b = Math.round((1 - ratio) * 230 + ratio * 0);
+        const r = Math.round((1-ratio)*173 + ratio*0);
+        const g = Math.round((1-ratio)*216 + ratio*255);
+        const b = Math.round((1-ratio)*230 + ratio*0);
         return `rgb(${r},${g},${b})`;
       } else {
-        const excess = Math.min(progress, 150) - 100;
+        const excess = Math.min(progress,150) - 100;
         const ratio = excess / 50;
-        const r = Math.round((1 - ratio) * 0 + ratio * 139);
-        const g = Math.round((1 - ratio) * 255 + ratio * 0);
+        const r = Math.round((1-ratio)*0 + ratio*139);
+        const g = Math.round((1-ratio)*255 + ratio*0);
         return `rgb(${r},${g},0)`;
       }
     }
   </script>
 {% endblock %}
-
-
