@@ -11,7 +11,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 import core.settings as settings
 from core.database import Base, engine
 from core.fixtures import fixtures
-from routes import accounts, budgets, cards, categories, index, login, register, transactions
+from routes import accounts, budgets, cards, categories, index, login, register, transactions, settings as settings_route
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,4 +80,5 @@ app.include_router(cards.router)
 app.include_router(categories.router)
 app.include_router(budgets.router)
 app.include_router(transactions.router)
+app.include_router(settings_route.router)
 app.include_router(index.router)

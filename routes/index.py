@@ -10,7 +10,7 @@ from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.orm import Session, joinedload
 
 from core.database import get_db
-from core.models import Budget, Card, Category, Transaction, Account
+from core.models import Budget, Card, Category, Transaction, Account, UserSettings
 from core.schemas import CategoryType, TransactionIndexOut, Permissions, ComboboxOption
 from core.templates import templates
 from core.utils import alert_error, alert_success, get_alerts
@@ -80,25 +80,25 @@ def shift_month(year: int, month: int, delta: int):
     return new_year, new_month
 
 
-def get_period_range(year: int, month: int):
-    if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
+def get_period_range(year: int, month: int, first_day: int = FIRST_DAY_OF_MONTH, last_day_param: int = LAST_DAY_OF_MONTH):
+    if first_day > last_day_param:
         prev_year, prev_month = shift_month(year, month, -1)
         _, last_day = calendar.monthrange(prev_year, prev_month)
         start_date = datetime(
             prev_year,
             prev_month,
-            FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day,
-            0,0,0,0
+            first_day if first_day <= last_day else last_day,
+            0, 0, 0, 0
         )
     else:
         _, last_day = calendar.monthrange(year, month)
         start_date = datetime(
-            year, month, FIRST_DAY_OF_MONTH if FIRST_DAY_OF_MONTH <= last_day else last_day,
-            0,0,0,0
+            year, month, first_day if first_day <= last_day else last_day,
+            0, 0, 0, 0
         )
 
     _, last_day = calendar.monthrange(year, month)
-    end_date = datetime(year, month, LAST_DAY_OF_MONTH if LAST_DAY_OF_MONTH <= last_day else last_day,23,59,59,999999   )
+    end_date = datetime(year, month, last_day_param if last_day_param <= last_day else last_day, 23, 59, 59, 999999)
     return start_date, end_date
 
 
@@ -268,15 +268,20 @@ def get_index(
     pending_per_page: int = Query(15),
     is_preview: bool = Query(False, alias="preview"),
 ):
+    # Carrega configurações do usuário (período de faturamento)
+    user_cfg = db.query(UserSettings).filter_by(user_id=user.id).first()
+    p_start = user_cfg.period_start_day if user_cfg else FIRST_DAY_OF_MONTH
+    p_end = user_cfg.period_end_day if user_cfg else LAST_DAY_OF_MONTH
+
     # Determina o "mês nominal" se não forem passados year e month
     if not year or not month:
         today = date.today()
         year, month = today.year, today.month
-        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
-            if today.day >= FIRST_DAY_OF_MONTH:
+        if p_start > p_end:
+            if today.day >= p_start:
                 year, month = shift_month(year, month, 1)
 
-    start_date, end_date = get_period_range(year, month)
+    start_date, end_date = get_period_range(year, month, p_start, p_end)
 
     # Obtém o nome do mês em inglês e traduz manualmente
     month_name = datetime(year, month, 1).strftime("%B/%Y").title()
@@ -295,13 +300,13 @@ def get_index(
         )
     ]
     for card in cards:
-        if FIRST_DAY_OF_MONTH > LAST_DAY_OF_MONTH:
-            if card.due_day < FIRST_DAY_OF_MONTH:
+        if p_start > p_end:
+            if card.due_day < p_start:
                 year_card, month_card = shift_month(year, month, -1)
             else:
                 year_card, month_card = shift_month(year, month, -2)
         else:
-            if card.due_day < FIRST_DAY_OF_MONTH:
+            if card.due_day < p_start:
                 year_card, month_card = year, month
             else:
                 year_card, month_card = shift_month(year, month, -1)

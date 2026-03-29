@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Configurações{% endblock %}
+{% block header %}Configurações{% endblock %}
+
+{% block content %}
+{% include "components/alerts.html" %}
+
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <!-- Período de Faturamento -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-base mb-1">
+        <i class="fas fa-calendar-alt text-primary"></i>
+        Período de Faturamento
+      </h2>
+      <p class="text-sm text-base-content/50 mb-4">
+        Define os dias de início e fim do ciclo mensal da dashboard.
+        <br>Ex: início 20 e fim 19 = do dia 20 de um mês ao dia 19 do próximo.
+      </p>
+      <form method="post" action="/settings/period" class="flex flex-wrap items-end gap-4">
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Dia de início</span></label>
+          <input type="number" name="period_start_day" min="1" max="31"
+                 value="{{ user_settings.period_start_day }}"
+                 class="input input-bordered w-28" required>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Dia de fim</span></label>
+          <input type="number" name="period_end_day" min="1" max="31"
+                 value="{{ user_settings.period_end_day }}"
+                 class="input input-bordered w-28" required>
+        </div>
+        <button type="submit" class="btn btn-primary gap-2">
+          <i class="fas fa-save"></i> Salvar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Perfil -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-base mb-1">
+        <i class="fas fa-user text-primary"></i>
+        Perfil
+      </h2>
+      <form method="post" action="/settings/profile" class="space-y-4">
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Nome</span></label>
+          <input type="text" name="name" value="{{ request.state.user.name }}"
+                 class="input input-bordered" required>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">E-mail</span></label>
+          <input type="email" name="email" value="{{ request.state.user.email }}"
+                 class="input input-bordered" required>
+        </div>
+        <button type="submit" class="btn btn-primary gap-2">
+          <i class="fas fa-save"></i> Salvar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Alterar Senha -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-base mb-1">
+        <i class="fas fa-lock text-primary"></i>
+        Alterar Senha
+      </h2>
+      <form method="post" action="/settings/password" class="space-y-4">
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Senha atual</span></label>
+          <input type="password" name="current_password" class="input input-bordered" required>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Nova senha</span></label>
+          <input type="password" name="new_password" class="input input-bordered"
+                 minlength="6" required>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text">Confirmar nova senha</span></label>
+          <input type="password" name="confirm_password" class="input input-bordered"
+                 minlength="6" required>
+        </div>
+        <button type="submit" class="btn btn-primary gap-2">
+          <i class="fas fa-key"></i> Alterar senha
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
