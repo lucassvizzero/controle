@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+{% block header %}Relatórios{% endblock %}
+
+{% block content %}
+{% include "components/alerts.html" %}
+
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3"></script>
+
+<script>
+  const APEX_DEFAULTS = {
+    chart: { background: "transparent", foreColor: "#a6adbb", toolbar: { show: false } },
+    grid: { borderColor: "#2a323c" },
+    tooltip: { theme: "dark" },
+    legend: { labels: { colors: "#a6adbb" } },
+  };
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  function fmtBRL(val) {
+    return "R$ " + val.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  }
+
+  function showTab(id) {
+    document.querySelectorAll(".report-tab-panel").forEach(p => p.classList.add("hidden"));
+    document.querySelectorAll(".report-tab-btn").forEach(b => b.classList.remove("tab-active"));
+    document.getElementById("panel-" + id).classList.remove("hidden");
+    document.getElementById("tab-" + id).classList.add("tab-active");
+  }
+
+  // ── Annual ───────────────────────────────────────────────────────────────────
+
+  let annualChart;
+  async function loadAnnual() {
+    const year = document.getElementById("sel-annual-year").value;
+    const res = await fetch(`/reports/data/annual?year=${year}`);
+    const d = await res.json();
+
+    const opts = {
+      ...APEX_DEFAULTS,
+      chart: { ...APEX_DEFAULTS.chart, type: "bar", height: 360, stacked: false },
+      series: [
+        { name: "Entrou", type: "bar", data: d.entrou },
+        { name: "Saiu",   type: "bar", data: d.saiu },
+        { name: "Investiu", type: "bar", data: d.investiu },
+        { name: "Sobrou", type: "line", data: d.sobrou },
+      ],
+      colors: ["#22c55e", "#ef4444", "#f59e0b", "#38bdf8"],
+      xaxis: { categories: d.months },
+      yaxis: { labels: { formatter: v => "R$ " + v.toLocaleString("pt-BR", {minimumFractionDigits: 0}) } },
+      stroke: { width: [0, 0, 0, 3], curve: "smooth" },
+      markers: { size: [0, 0, 0, 4] },
+      plotOptions: { bar: { columnWidth: "65%", borderRadius: 3 } },
+      dataLabels: { enabled: false },
+    };
+
+    if (annualChart) { annualChart.destroy(); }
+    annualChart = new ApexCharts(document.getElementById("chart-annual"), opts);
+    annualChart.render();
+
+    // Totals table
+    const total = (arr) => arr.reduce((a, b) => a + b, 0);
+    document.getElementById("annual-totals").innerHTML = `
+      <tr><td class="text-success">Entrou</td><td class="text-right font-mono">${fmtBRL(total(d.entrou))}</td></tr>
+      <tr><td class="text-error">Saiu</td><td class="text-right font-mono">${fmtBRL(total(d.saiu))}</td></tr>
+      <tr><td class="text-warning">Investiu</td><td class="text-right font-mono">${fmtBRL(total(d.investiu))}</td></tr>
+      <tr><td class="text-info font-semibold">Sobrou</td><td class="text-right font-mono text-info font-semibold">${fmtBRL(total(d.sobrou))}</td></tr>
+    `;
+  }
+
+  // ── Categories ───────────────────────────────────────────────────────────────
+
+  let catExpChart, catIncChart;
+  async function loadCategories() {
+    const year = document.getElementById("sel-cat-year").value;
+    const month = document.getElementById("sel-cat-month").value;
+    const res = await fetch(`/reports/data/categories?year=${year}&month=${month}`);
+    const d = await res.json();
+
+    function buildDonut(elId, items, title) {
+      const el = document.getElementById(elId);
+      if (catExpChart && elId === "chart-cat-exp") { catExpChart.destroy(); catExpChart = null; }
+      if (catIncChart && elId === "chart-cat-inc") { catIncChart.destroy(); catIncChart = null; }
+      if (!items.length) {
+        el.innerHTML = `<div class="flex items-center justify-center h-48 text-base-content/40">Sem dados</div>`;
+        return null;
+      }
+      const opts = {
+        ...APEX_DEFAULTS,
+        chart: { ...APEX_DEFAULTS.chart, type: "donut", height: 280 },
+        series: items.map(i => i.total),
+        labels: items.map(i => i.name),
+        colors: items.map(i => i.color),
+        title: { text: title, style: { color: "#a6adbb", fontSize: "13px" } },
+        dataLabels: { enabled: true, formatter: (val) => val.toFixed(1) + "%" },
+        plotOptions: { pie: { donut: { size: "60%" } } },
+        tooltip: { y: { formatter: fmtBRL } },
+      };
+      const chart = new ApexCharts(el, opts);
+      chart.render();
+      return chart;
+    }
+
+    catExpChart = buildDonut("chart-cat-exp", d.expense, "Despesas");
+    catIncChart = buildDonut("chart-cat-inc", d.income, "Receitas");
+
+    // Table
+    const rows = (items, cls) => items.map(i =>
+      `<tr><td><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${i.color}"></span>${i.name}</td>
+       <td class="text-right font-mono ${cls}">${fmtBRL(i.total)}</td></tr>`
+    ).join("");
+    document.getElementById("cat-exp-table").innerHTML = rows(d.expense, "text-error");
+    document.getElementById("cat-inc-table").innerHTML = rows(d.income, "text-success");
+  }
+
+  // ── Accounts ─────────────────────────────────────────────────────────────────
+
+  let accChart;
+  async function loadAccounts() {
+    const year = document.getElementById("sel-acc-year").value;
+    const month = document.getElementById("sel-acc-month").value;
+    const res = await fetch(`/reports/data/accounts?year=${year}&month=${month}`);
+    const d = await res.json();
+
+    if (accChart) { accChart.destroy(); }
+    const el = document.getElementById("chart-accounts");
+    if (!d.length) {
+      el.innerHTML = `<div class="flex items-center justify-center h-48 text-base-content/40">Sem dados</div>`;
+      return;
+    }
+    const opts = {
+      ...APEX_DEFAULTS,
+      chart: { ...APEX_DEFAULTS.chart, type: "bar", height: Math.max(180, d.length * 60), stacked: false },
+      series: [
+        { name: "Receita", data: d.map(a => a.income) },
+        { name: "Despesa", data: d.map(a => a.expense) },
+      ],
+      colors: ["#22c55e", "#ef4444"],
+      xaxis: { categories: d.map(a => a.name) },
+      yaxis: { labels: { formatter: v => "R$ " + v.toLocaleString("pt-BR", {minimumFractionDigits: 0}) } },
+      plotOptions: { bar: { horizontal: true, borderRadius: 3, barHeight: "55%" } },
+      dataLabels: { enabled: false },
+      tooltip: { y: { formatter: fmtBRL } },
+    };
+    accChart = new ApexCharts(el, opts);
+    accChart.render();
+  }
+
+  // ── Budgets ──────────────────────────────────────────────────────────────────
+
+  let budgetChart;
+  async function loadBudgets() {
+    const year = document.getElementById("sel-bud-year").value;
+    const month = document.getElementById("sel-bud-month").value;
+    const res = await fetch(`/reports/data/budgets?year=${year}&month=${month}`);
+    const d = await res.json();
+
+    if (budgetChart) { budgetChart.destroy(); }
+    const el = document.getElementById("chart-budgets");
+    if (!d.length) {
+      el.innerHTML = `<div class="flex items-center justify-center h-48 text-base-content/40">Sem orçamentos para este período</div>`;
+      document.getElementById("budget-table").innerHTML = `<tr><td colspan="4" class="text-center text-base-content/40 py-4">Sem dados</td></tr>`;
+      return;
+    }
+
+    const opts = {
+      ...APEX_DEFAULTS,
+      chart: { ...APEX_DEFAULTS.chart, type: "bar", height: Math.max(220, d.length * 55) },
+      series: [
+        { name: "Limite", data: d.map(b => b.limit) },
+        { name: "Realizado", data: d.map(b => b.spent) },
+      ],
+      colors: ["#38bdf8", "#f59e0b"],
+      xaxis: { categories: d.map(b => b.name) },
+      yaxis: { labels: { formatter: v => "R$ " + v.toLocaleString("pt-BR", {minimumFractionDigits: 0}) } },
+      plotOptions: { bar: { borderRadius: 3, columnWidth: "60%" } },
+      dataLabels: { enabled: false },
+      tooltip: { y: { formatter: fmtBRL } },
+    };
+    budgetChart = new ApexCharts(el, opts);
+    budgetChart.render();
+
+    document.getElementById("budget-table").innerHTML = d.map(b => {
+      const pct = b.percent;
+      const color = pct > 100 ? "text-error" : pct > 80 ? "text-warning" : "text-success";
+      return `<tr>
+        <td><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${b.color}"></span>${b.name}</td>
+        <td class="text-right font-mono">${fmtBRL(b.limit)}</td>
+        <td class="text-right font-mono">${fmtBRL(b.spent)}</td>
+        <td class="text-right font-mono ${color}">${pct}%</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+  document.addEventListener("DOMContentLoaded", () => {
+    showTab("annual");
+    loadAnnual();
+  });
+</script>
+
+<!-- Tabs -->
+<div class="tabs tabs-boxed mb-6 w-fit">
+  <button id="tab-annual"     class="report-tab-btn tab" onclick="showTab('annual');    loadAnnual()">
+    <i class="fas fa-chart-bar mr-2"></i>Anual
+  </button>
+  <button id="tab-categories" class="report-tab-btn tab" onclick="showTab('categories'); loadCategories()">
+    <i class="fas fa-folder mr-2"></i>Categorias
+  </button>
+  <button id="tab-accounts"   class="report-tab-btn tab" onclick="showTab('accounts');  loadAccounts()">
+    <i class="fas fa-university mr-2"></i>Contas
+  </button>
+  <button id="tab-budgets"    class="report-tab-btn tab" onclick="showTab('budgets');   loadBudgets()">
+    <i class="fas fa-chart-line mr-2"></i>Orçamentos
+  </button>
+</div>
+
+<!-- ── ANUAL ── -->
+<div id="panel-annual" class="report-tab-panel">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <select id="sel-annual-year" class="select select-bordered select-sm" onchange="loadAnnual()">
+      {% for y in available_years %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <div class="xl:col-span-2 card bg-base-100 border border-base-300 shadow-sm p-4">
+      <div id="chart-annual"></div>
+    </div>
+    <div class="card bg-base-100 border border-base-300 shadow-sm p-4">
+      <h3 class="font-semibold mb-3 text-sm text-base-content/60 uppercase tracking-wide">Total do Ano</h3>
+      <table class="table table-sm w-full">
+        <tbody id="annual-totals"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── CATEGORIAS ── -->
+<div id="panel-categories" class="report-tab-panel hidden">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <select id="sel-cat-year" class="select select-bordered select-sm" onchange="loadCategories()">
+      {% for y in available_years %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select id="sel-cat-month" class="select select-bordered select-sm" onchange="loadCategories()">
+      <option value="0">Ano inteiro</option>
+      {% for m, name in [
+        (1,"Janeiro"),(2,"Fevereiro"),(3,"Março"),(4,"Abril"),(5,"Maio"),(6,"Junho"),
+        (7,"Julho"),(8,"Agosto"),(9,"Setembro"),(10,"Outubro"),(11,"Novembro"),(12,"Dezembro")
+      ] %}
+        <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="card bg-base-100 border border-base-300 shadow-sm p-4">
+      <div id="chart-cat-exp"></div>
+      <table class="table table-sm w-full mt-3">
+        <tbody id="cat-exp-table"></tbody>
+      </table>
+    </div>
+    <div class="card bg-base-100 border border-base-300 shadow-sm p-4">
+      <div id="chart-cat-inc"></div>
+      <table class="table table-sm w-full mt-3">
+        <tbody id="cat-inc-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONTAS ── -->
+<div id="panel-accounts" class="report-tab-panel hidden">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <select id="sel-acc-year" class="select select-bordered select-sm" onchange="loadAccounts()">
+      {% for y in available_years %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select id="sel-acc-month" class="select select-bordered select-sm" onchange="loadAccounts()">
+      <option value="0">Ano inteiro</option>
+      {% for m, name in [
+        (1,"Janeiro"),(2,"Fevereiro"),(3,"Março"),(4,"Abril"),(5,"Maio"),(6,"Junho"),
+        (7,"Julho"),(8,"Agosto"),(9,"Setembro"),(10,"Outubro"),(11,"Novembro"),(12,"Dezembro")
+      ] %}
+        <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="card bg-base-100 border border-base-300 shadow-sm p-4">
+    <div id="chart-accounts"></div>
+  </div>
+</div>
+
+<!-- ── ORÇAMENTOS ── -->
+<div id="panel-budgets" class="report-tab-panel hidden">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <select id="sel-bud-year" class="select select-bordered select-sm" onchange="loadBudgets()">
+      {% for y in available_years %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select id="sel-bud-month" class="select select-bordered select-sm" onchange="loadBudgets()">
+      {% for m, name in [
+        (1,"Janeiro"),(2,"Fevereiro"),(3,"Março"),(4,"Abril"),(5,"Maio"),(6,"Junho"),
+        (7,"Julho"),(8,"Agosto"),(9,"Setembro"),(10,"Outubro"),(11,"Novembro"),(12,"Dezembro")
+      ] %}
+        <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <div class="xl:col-span-2 card bg-base-100 border border-base-300 shadow-sm p-4">
+      <div id="chart-budgets"></div>
+    </div>
+    <div class="card bg-base-100 border border-base-300 shadow-sm p-4">
+      <h3 class="font-semibold mb-3 text-sm text-base-content/60 uppercase tracking-wide">Detalhes</h3>
+      <table class="table table-sm w-full">
+        <thead>
+          <tr class="bg-base-200">
+            <th>Categoria</th>
+            <th class="text-right">Limite</th>
+            <th class="text-right">Realizado</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody id="budget-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
