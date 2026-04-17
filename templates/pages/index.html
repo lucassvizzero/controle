@@ -61,6 +61,87 @@
     </div>
   </div>
 
+  <!-- Saldo em Conta e Total Guardado -->
+  <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-4 bg-base-100">
+    <div class="stat">
+      <div class="stat-figure text-primary">
+        <i class="fas fa-wallet text-3xl"></i>
+      </div>
+      <div class="stat-title">Saldo Inicial</div>
+      <div class="stat-value text-primary text-2xl flex items-center gap-2">
+        R$ {{ "%.2f"|format(saldo_inicial|float) }}
+        <button class="btn btn-xs btn-ghost opacity-60 hover:opacity-100"
+                onclick="openBalanceEditModal('saldo-inicial', {{ saldo_inicial|float }}, {{ year }}, {{ month }})"
+                title="Editar"><i class="fas fa-pencil-alt text-xs"></i></button>
+        {% if saldo_inicial_manual %}
+          <form method="post" action="/balance/reset" class="inline">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="field" value="saldo_inicial">
+            <button type="submit" class="btn btn-xs btn-ghost text-warning opacity-60 hover:opacity-100" title="Remover valor manual (recalcular)">
+              <i class="fas fa-undo text-xs"></i>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      {% if saldo_inicial_manual %}
+        <div class="stat-desc text-warning">Valor manual</div>
+      {% endif %}
+    </div>
+
+    <div class="stat">
+      <div class="stat-figure text-secondary">
+        <i class="fas fa-balance-scale text-3xl"></i>
+      </div>
+      <div class="stat-title">Saldo Final</div>
+      <div class="stat-value text-secondary text-2xl flex items-center gap-2">
+        R$ {{ "%.2f"|format(saldo_final|float) }}
+        <button class="btn btn-xs btn-ghost opacity-60 hover:opacity-100"
+                onclick="openBalanceEditModal('saldo-final', {{ saldo_final|float }}, {{ year }}, {{ month }})"
+                title="Editar"><i class="fas fa-pencil-alt text-xs"></i></button>
+        {% if saldo_final_manual %}
+          <form method="post" action="/balance/reset" class="inline">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="field" value="saldo_final">
+            <button type="submit" class="btn btn-xs btn-ghost text-warning opacity-60 hover:opacity-100" title="Remover valor manual (recalcular)">
+              <i class="fas fa-undo text-xs"></i>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      {% if saldo_final_manual %}
+        <div class="stat-desc text-warning">Valor manual</div>
+      {% endif %}
+    </div>
+
+    <div class="stat">
+      <div class="stat-figure text-accent">
+        <i class="fas fa-piggy-bank text-3xl"></i>
+      </div>
+      <div class="stat-title">Total Guardado</div>
+      <div class="stat-value text-accent text-2xl flex items-center gap-2">
+        R$ {{ "%.2f"|format(total_guardado|float) }}
+        <button class="btn btn-xs btn-ghost opacity-60 hover:opacity-100"
+                onclick="openBalanceEditModal('total-guardado', {{ total_guardado|float }}, {{ year }}, {{ month }})"
+                title="Editar"><i class="fas fa-pencil-alt text-xs"></i></button>
+        {% if total_guardado_manual %}
+          <form method="post" action="/balance/reset" class="inline">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="field" value="total_guardado">
+            <button type="submit" class="btn btn-xs btn-ghost text-warning opacity-60 hover:opacity-100" title="Remover valor manual (recalcular)">
+              <i class="fas fa-undo text-xs"></i>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      {% if total_guardado_manual %}
+        <div class="stat-desc text-warning">Valor manual</div>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- Cards de resumo -->
   <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
     <div class="stat">
@@ -552,6 +633,55 @@
 
     function closeAjusteSobrouModal() {
       document.getElementById("ajuste-sobrou-modal").classList.add("hidden");
+    }
+  </script>
+
+  <!-- Modal: Editar Saldo/Guardado -->
+  <div id="balance-edit-modal"
+       class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+       onclick="closeBalanceEditModal()">
+    <div class="modal-box w-full max-w-sm shadow-2xl" onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closeBalanceEditModal()">&#x2715;</button>
+      <h2 id="balance-edit-title" class="text-xl font-bold mb-5">Editar Valor</h2>
+      <form method="post" id="balance-edit-form" class="space-y-4">
+        <input type="hidden" name="year" id="balance-edit-year">
+        <input type="hidden" name="month" id="balance-edit-month">
+        <div class="form-control">
+          <label for="balance-edit-value" class="label pb-1">
+            <span class="label-text font-medium">Novo valor (R$)</span>
+          </label>
+          <input type="number" id="balance-edit-value" name="value"
+                 step="0.01" class="input input-bordered" required>
+        </div>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-primary gap-2">
+            <i class="fas fa-check"></i> Confirmar
+          </button>
+          <button type="button" onclick="closeBalanceEditModal()" class="btn btn-ghost">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const balanceLabels = {
+      'saldo-inicial': 'Editar Saldo Inicial',
+      'saldo-final': 'Editar Saldo Final',
+      'total-guardado': 'Editar Total Guardado'
+    };
+
+    function openBalanceEditModal(type, currentValue, year, month) {
+      document.getElementById('balance-edit-title').textContent = balanceLabels[type] || 'Editar Valor';
+      document.getElementById('balance-edit-form').action = '/balance/' + type;
+      document.getElementById('balance-edit-value').value = currentValue.toFixed(2);
+      document.getElementById('balance-edit-year').value = year;
+      document.getElementById('balance-edit-month').value = month;
+      document.getElementById('balance-edit-modal').classList.remove('hidden');
+      document.getElementById('balance-edit-value').select();
+    }
+
+    function closeBalanceEditModal() {
+      document.getElementById('balance-edit-modal').classList.add('hidden');
     }
   </script>
 

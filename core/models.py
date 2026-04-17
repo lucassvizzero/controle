@@ -25,6 +25,8 @@ class User(Base):
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     user_settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    monthly_balances = relationship("MonthlyBalance", back_populates="user", cascade="all, delete-orphan")
+    monthly_savings = relationship("MonthlySavings", back_populates="user", cascade="all, delete-orphan")
 
 
 # 🔹 Configurações do Usuário
@@ -195,3 +197,49 @@ class Transaction(Base):
     linked_transactions = relationship(
         "Transaction", back_populates="parent", cascade="all, delete-orphan"
     )
+
+
+# 🔹 Saldo Mensal (Saldo em Conta)
+class MonthlyBalance(Base):
+    __tablename__ = "monthly_balances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+
+    saldo_inicial = Column(DECIMAL(15, 2), nullable=False, default=0)
+    saldo_final = Column(DECIMAL(15, 2), nullable=False, default=0)
+    saldo_inicial_manual = Column(Boolean, default=False)
+    saldo_final_manual = Column(Boolean, default=False)
+
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_monthly_balance_user_year_month", "user_id", "year", "month", unique=True),
+    )
+
+    user = relationship("User", back_populates="monthly_balances")
+
+
+# 🔹 Total Guardado (Poupança/Investimentos)
+class MonthlySavings(Base):
+    __tablename__ = "monthly_savings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+
+    total_guardado = Column(DECIMAL(15, 2), nullable=False, default=0)
+    is_manual = Column(Boolean, default=False)
+
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_monthly_savings_user_year_month", "user_id", "year", "month", unique=True),
+    )
+
+    user = relationship("User", back_populates="monthly_savings")

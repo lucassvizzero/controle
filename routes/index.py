@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.orm import Session, joinedload
 
+from core.balance import recalculate_balance, recalculate_savings
 from core.database import get_db
 from core.models import Budget, Card, Category, Transaction, Account, UserSettings
 from core.schemas import CategoryType, TransactionIndexOut, Permissions, ComboboxOption
@@ -399,6 +400,11 @@ def get_index(
     saiu = saiu - credito_cartao
     sobrou = entrou - (saiu + investiu)
 
+    # Saldo em Conta e Total Guardado
+    balance = recalculate_balance(db, user.id, year, month, entrou, saiu, investiu)
+    savings = recalculate_savings(db, user.id, year, month, investiu)
+    db.commit()
+
     entrou_preview = (
         sum(
             t.value
@@ -585,6 +591,12 @@ def get_index(
             "total_pending": total_pending,
             "pending_page": pending_page,
             "pending_per_page": pending_per_page,
+            "saldo_inicial": balance.saldo_inicial,
+            "saldo_final": balance.saldo_final,
+            "saldo_inicial_manual": balance.saldo_inicial_manual,
+            "saldo_final_manual": balance.saldo_final_manual,
+            "total_guardado": savings.total_guardado,
+            "total_guardado_manual": savings.is_manual,
             "current_date": date.today(),
             "permissions": permissions,
             "entity": "transactions",

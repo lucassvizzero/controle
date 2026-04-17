@@ -36,8 +36,12 @@ def get_categories(
     name: str = Query(None, alias="f_name"),
     type_filter: str = Query(None, alias="f_type_filter"),
 ):
-    # Constrói a query base para categorias "pais"
-    query = db.query(Category).filter(Category.user_id == user.id, Category.parent_id == None)
+    # Constrói a query base para categorias "pais" (exclui categorias do sistema)
+    query = db.query(Category).filter(
+        Category.user_id == user.id,
+        Category.parent_id == None,
+        Category.system_category == False,
+    )
     if name:
         query = query.filter(Category.name.ilike(f"%{name}%"))
     if type_filter:
@@ -108,7 +112,11 @@ def get_categories(
     # Cria o schema para o CRUD (para o modal de adicionar/editar)
     parent_options = [ComboboxOption(value="", label="Ninguém")]
     for c in (
-        db.query(Category).filter(Category.user_id == user.id, Category.parent_id == None).all()
+        db.query(Category).filter(
+            Category.user_id == user.id,
+            Category.parent_id == None,
+            Category.system_category == False,
+        ).all()
     ):
         parent_options.append(ComboboxOption(value=c.id, label=c.name))
 
@@ -292,6 +300,9 @@ def unlink_category(
     )
     if not category:
         raise HTTPException(status_code=404, detail="Categoria não encontrada")
+    if category.system_category:
+        alert_error(request, "Não é possível modificar categorias do sistema")
+        return RedirectResponse(url="/categories", status_code=303)
 
     category.parent_id = None
     db.commit()
