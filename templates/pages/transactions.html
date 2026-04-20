@@ -12,4 +12,123 @@
 {% include "components/datagrid.html" %}
 {% include "components/crud_modal.html" %}
 {% include "components/upload_modal.html" %}
+
+<!-- Modal de grupo (parcelas/recorrentes) -->
+<div id="group-modal"
+     class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+     onclick="closeGroupModal(event)">
+  <div class="modal-box w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
+    <button class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4" onclick="closeGroupModal()">✕</button>
+    <h2 id="group-modal-title" class="text-xl font-bold mb-1"></h2>
+    <p id="group-modal-subtitle" class="text-sm text-base-content/60 mb-4"></p>
+    <div id="group-modal-loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-lg"></span>
+    </div>
+    <div id="group-modal-content" class="hidden">
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm w-full">
+          <thead>
+            <tr class="bg-base-200">
+              <th>#</th>
+              <th>Descrição</th>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+              <th class="text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="group-modal-body"></tbody>
+          <tfoot>
+            <tr class="bg-base-200 font-bold">
+              <td colspan="3">Total</td>
+              <td id="group-modal-total" class="text-right font-mono"></td>
+              <td id="group-modal-stats" class="text-center text-xs"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function openGroupModal(transactionId) {
+  const modal = document.getElementById("group-modal");
+  const loading = document.getElementById("group-modal-loading");
+  const content = document.getElementById("group-modal-content");
+  const body = document.getElementById("group-modal-body");
+  const title = document.getElementById("group-modal-title");
+  const subtitle = document.getElementById("group-modal-subtitle");
+  const totalEl = document.getElementById("group-modal-total");
+  const statsEl = document.getElementById("group-modal-stats");
+
+  // Reset state
+  loading.classList.remove("hidden");
+  content.classList.add("hidden");
+  body.innerHTML = "";
+  modal.classList.remove("hidden");
+
+  try {
+    const res = await fetch(`/transactions/${transactionId}/group`);
+    const data = await res.json();
+
+    if (data.error || !data.transactions || data.transactions.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-base-content/40">Nenhuma transação vinculada encontrada.</td></tr>';
+      title.textContent = "Grupo";
+      subtitle.textContent = "";
+      loading.classList.add("hidden");
+      content.classList.remove("hidden");
+      return;
+    }
+
+    const isInstallment = data.group_type === "installment";
+    const firstDesc = data.transactions[0].description.replace(/^\(\d+\/\d+\)\s*/, "");
+    title.textContent = isInstallment
+      ? `Parcelas — ${firstDesc}`
+      : `Recorrente — ${firstDesc}`;
+    subtitle.textContent = `${data.total} transação${data.total > 1 ? "ões" : ""}`;
+
+    let total = 0;
+    let paid = 0;
+
+    data.transactions.forEach((t, idx) => {
+      const dueDate = t.due_at ? new Date(t.due_at + "T00:00:00").toLocaleDateString("pt-BR") : "";
+      const isPaid = !!t.paid_at;
+      if (isPaid) paid++;
+      total += t.value;
+
+      const num = isInstallment ? `${t.current_installment || (idx + 1)}/${t.installments || data.total}` : (idx + 1);
+      const statusBadge = isPaid
+        ? '<span class="badge badge-success badge-xs">Pago</span>'
+        : '<span class="badge badge-warning badge-xs">Pendente</span>';
+      const highlight = t.id === transactionId ? ' class="bg-primary/10"' : ' class="hover"';
+
+      body.innerHTML += `
+        <tr${highlight}>
+          <td class="text-base-content/50 text-xs">${num}</td>
+          <td>${t.description}</td>
+          <td class="text-xs text-base-content/50">${dueDate}</td>
+          <td class="text-right font-mono ${t.category_type === 'expense' ? 'text-error' : 'text-success'}">
+            R$ ${t.value.toFixed(2)}
+          </td>
+          <td class="text-center">${statusBadge}</td>
+        </tr>`;
+    });
+
+    totalEl.textContent = `R$ ${total.toFixed(2)}`;
+    statsEl.textContent = `${paid}/${data.total} pago${paid !== 1 ? "s" : ""}`;
+
+    loading.classList.add("hidden");
+    content.classList.remove("hidden");
+  } catch (err) {
+    body.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-error">Erro ao carregar grupo.</td></tr>';
+    loading.classList.add("hidden");
+    content.classList.remove("hidden");
+  }
+}
+
+function closeGroupModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById("group-modal").classList.add("hidden");
+}
+</script>
 {% endblock %}

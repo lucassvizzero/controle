@@ -141,7 +141,7 @@ def get_transactions(
         Column(label="Conta", type="text", sort=True, sort_key="account"),
         Column(label="Cartão", type="text", sort=True, sort_key="card"),
         Column(label="Categoria", type="html", sort=True, sort_key="category"),
-        Column(label="Descrição", type="text", sort=True, sort_key="description"),
+        Column(label="Descrição", type="html", sort=True, sort_key="description"),
         Column(label="Valor", type="currency", sort=True, sort_key="value"),
         Column(label="Vencimento", type="date", sort=True, sort_key="due_at"),
         Column(label="Pago em", type="datetime-local", sort=True, sort_key="paid_at"),
@@ -163,13 +163,29 @@ def get_transactions(
         display_value = float(t.value)
         if t.category and t.category.type == CategoryType.expense:
             display_value = -display_value
+
+        # Indicador de grupo (parcelada/recorrente)
+        description_html = t.description or ""
+        is_group = (t.installments is not None) or t.is_recurring or t.parent_id is not None
+        if is_group:
+            if t.installments is not None:
+                badge = '<span class="badge badge-xs badge-warning ml-1">Parcela</span>'
+            else:
+                badge = '<span class="badge badge-xs badge-info ml-1">Recorrente</span>'
+            group_btn = (
+                f' <button onclick="openGroupModal({t.id})" '
+                f'class="btn btn-ghost btn-xs opacity-50 hover:opacity-100" title="Ver grupo">'
+                f'<i class="fas fa-layer-group text-xs"></i></button>'
+            )
+            description_html = f'{description_html}{badge}{group_btn}'
+
         values.append(
             [
                 t.id,
                 account_name,
                 card_name,
                 category_html,
-                t.description or "",
+                description_html,
                 display_value,
                 t.due_at,
                 t.paid_at,
@@ -536,6 +552,79 @@ def get_transaction(
         "is_installment": bool(transaction.installments),
         "total_installments": transaction.installments,
         "current_installment": transaction.current_installment,
+    }
+
+
+@router.get("/transactions/{transaction_id}/group")
+def get_transaction_group(
+    transaction_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
+):
+    """Retorna todas as transações vinculadas (parcelas ou recorrentes)."""
+    transaction = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id, Transaction.user_id == user.id)
+        .first()
+    )
+    if not transaction:
+        return {"error": "Transação não encontrada", "transactions": []}
+
+    # Encontrar a raiz: subir pela cadeia de parent_id
+    root = transaction
+    visited = {root.id}
+    while root.parent_id:
+        parent = (
+            db.query(Transaction)
+            .filter(Transaction.id == root.parent_id, Transaction.user_id == user.id)
+            .first()
+        )
+        if not parent or parent.id in visited:
+            break
+        visited.add(parent.id)
+        root = parent
+
+    # Coletar todos os filhos a partir da raiz
+    chain = [root]
+    current = root
+    visited_down = {current.id}
+    while True:
+        child = (
+            db.query(Transaction)
+            .filter(
+                Transaction.parent_id == current.id,
+                Transaction.user_id == user.id,
+                Transaction.is_deleted.is_(False),
+            )
+            .first()
+        )
+        if not child or child.id in visited_down:
+            break
+        visited_down.add(child.id)
+        chain.append(child)
+        current = child
+
+    is_installment = root.installments is not None
+    group_type = "installment" if is_installment else "recurring"
+
+    result = []
+    for t in chain:
+        result.append({
+            "id": t.id,
+            "description": t.description or "",
+            "value": float(t.value),
+            "due_at": t.due_at.isoformat() if t.due_at else "",
+            "paid_at": t.paid_at.isoformat() if t.paid_at else None,
+            "current_installment": t.current_installment,
+            "installments": t.installments,
+            "category_name": t.category.name if t.category else "",
+            "category_type": t.category.type if t.category else "",
+            "category_icon": t.category.icon if t.category else "",
+            "category_color": t.category.color if t.category else "",
+        })
+
+    return {
+        "group_type": group_type,
+        "total": len(result),
+        "transactions": result,
     }
 
 
